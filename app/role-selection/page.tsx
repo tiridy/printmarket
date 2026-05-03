@@ -87,7 +87,7 @@ export default function RoleSelection() {
                   : 'border-slate-700 bg-slate-950 text-slate-300 hover:border-orange-500'
               }`}
             >
-              <h2 className="text-xl font-semibold">Müşteri</h2>
+              <h2 className="text-xl font-semibold">Müşteri olarak devam et</h2>
               <p className="mt-2 text-slate-400">3D baskı talepleri oluşturun, teklifler alın ve siparişlerinizi yönetin.</p>
             </button>
 
@@ -99,7 +99,7 @@ export default function RoleSelection() {
                   : 'border-slate-700 bg-slate-950 text-slate-300 hover:border-orange-500'
               }`}
             >
-              <h2 className="text-xl font-semibold">Üretici</h2>
+              <h2 className="text-xl font-semibold">Üretici olarak devam et</h2>
               <p className="mt-2 text-slate-400">Ürünlerinizi listeleyin, teklifler verin ve siparişleri yönetin.</p>
             </button>
           </div>

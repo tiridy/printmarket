@@ -23,14 +23,12 @@ export default function Dashboard() {
           .eq('id', user.id)
           .single()
 
-        if (userData) {
-          if (userData.role === 'customer') {
-            router.push('/dashboard/customer')
-          } else if (userData.role === 'producer') {
-            router.push('/dashboard/producer')
-          }
+        if (userData?.role === 'customer') {
+          router.push('/dashboard/customer')
+        } else if (userData?.role === 'producer') {
+          router.push('/dashboard/producer')
         } else {
-          // Kullanıcı henüz rol seçmemiş, rol seçme sayfasına yönlendir
+          // Kullanıcı henüz rol seçmemiş veya rol bilgisi eksik, rol seçme sayfasına yönlendir
           router.push('/role-selection')
         }
       } else {
