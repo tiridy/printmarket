@@ -1,30 +1,38 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '../../utils/supabase'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import { supabase } from '../../utils/supabase'
+import { User } from '@supabase/supabase-js'
 
-interface User {
+interface ProducerProfile {
   id: string
-  email: string
-  role: string
+  company_name: string
+  description: string
+  location: string
+  rating: number
 }
 
 interface Product {
   id: string
   name: string
+  description: string
   price: number
+  category: string
   stock_quantity: number
   created_at: string
 }
 
 interface Offer {
   id: string
-  request_id: string
   price: number
+  description: string
+  estimated_time: number
   status: string
-  created_at: string
+  request: {
+    title: string
+    customer_id: string
+  }
 }
 
 interface Order {
@@ -32,76 +40,86 @@ interface Order {
   total_price: number
   status: string
   created_at: string
+  customer: {
+    email: string
+  }
 }
 
 export default function ProducerDashboard() {
+  const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
+  const [profile, setProfile] = useState<ProducerProfile | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [offers, setOffers] = useState<Offer[]>([])
   const [orders, setOrders] = useState<Order[]>([])
-  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('products')
 
   useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
+      setUser(user)
+
       if (!user) {
         router.push('/login')
         return
       }
 
-      // Get user profile
-      const { data: profile } = await supabase
+      // Kullanıcı rolünü kontrol et
+      const { data: userData } = await supabase
         .from('users')
-        .select('*')
+        .select('role')
         .eq('id', user.id)
         .single()
 
-      if (profile?.role !== 'producer') {
-        router.push('/dashboard/customer')
+      if (userData?.role !== 'producer') {
+        router.push('/dashboard')
         return
       }
 
-      setUser(profile)
-
-      // Get producer profile
-      const { data: producerProfile } = await supabase
+      // Üretici profilini yükle
+      const { data: profileData } = await supabase
         .from('producer_profiles')
         .select('*')
         .eq('user_id', user.id)
         .single()
 
-      if (!producerProfile) {
-        // Redirect to create profile
-        router.push('/create-profile')
-        return
-      }
+      setProfile(profileData)
 
-      // Get producer's products
-      const { data: userProducts } = await supabase
+      // Ürünleri yükle
+      const { data: productsData } = await supabase
         .from('products')
         .select('*')
-        .eq('producer_id', producerProfile.id)
+        .eq('producer_id', profileData?.id)
         .order('created_at', { ascending: false })
 
-      setProducts(userProducts || [])
+      setProducts(productsData || [])
 
-      // Get producer's offers
-      const { data: userOffers } = await supabase
+      // Teklifleri yükle
+      const { data: offersData } = await supabase
         .from('offers')
-        .select('*')
-        .eq('producer_id', producerProfile.id)
+        .select(`
+          *,
+          request:requests(title, customer_id)
+        `)
+        .eq('producer_id', profileData?.id)
         .order('created_at', { ascending: false })
 
-      setOffers(userOffers || [])
+      setOffers(offersData || [])
 
-      // Get producer's orders
-      const { data: userOrders } = await supabase
+      // Siparişleri yükle
+      const { data: ordersData } = await supabase
         .from('orders')
-        .select('*')
-        .eq('producer_id', producerProfile.id)
+        .select(`
+          *,
+          customer:users(email)
+        `)
+        .eq('producer_id', user.id)
         .order('created_at', { ascending: false })
 
-      setOrders(userOrders || [])
+      setOrders(ordersData || [])
+
+      setLoading(false)
     }
 
     getUser()
@@ -112,73 +130,136 @@ export default function ProducerDashboard() {
     router.push('/')
   }
 
-  if (!user) return <div>Yükleniyor...</div>
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <div className="text-white">Yükleniyor...</div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-950 text-white">
       {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <h1 className="text-2xl font-bold text-gray-900">Üretici Paneli</h1>
-            <div className="flex items-center space-x-4">
-              <span className="text-gray-700">{user.email}</span>
+      <header className="border-b border-slate-800 bg-slate-900/95">
+        <div className="mx-auto max-w-7xl px-6 py-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold text-orange-400">TİRİDY - Üretici Paneli</h1>
+            <div className="flex items-center gap-4">
+              <span className="text-slate-300">{user?.email}</span>
               <button
                 onClick={handleLogout}
-                className="text-red-600 hover:text-red-800"
+                className="rounded-lg bg-slate-800 px-4 py-2 text-sm hover:bg-slate-700"
               >
-                Çıkış
+                Çıkış Yap
               </button>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        {/* Profile Info */}
+        {profile && (
+          <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900 p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">{profile.company_name}</h2>
+                <p className="mt-2 text-slate-400">{profile.description}</p>
+                <div className="mt-4 flex items-center gap-4 text-sm text-slate-500">
+                  <span>Konum: {profile.location}</span>
+                  <span>Rating: ⭐ {profile.rating.toFixed(1)}</span>
+                </div>
+              </div>
+              <button className="rounded-lg bg-slate-800 px-4 py-2 text-sm hover:bg-slate-700">
+                Profili Düzenle
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Quick Actions */}
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">Hızlı İşlemler</h2>
-          <div className="flex space-x-4">
-            <Link
-              href="/create-product"
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
-            >
-              Yeni Ürün Ekle
-            </Link>
-            <Link
-              href="/browse-requests"
-              className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700"
-            >
-              Taleplere Göz At
-            </Link>
+        <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900 p-6">
+          <h2 className="mb-4 text-xl font-semibold">Hızlı İşlemler</h2>
+          <div className="flex flex-wrap gap-4">
+            <button className="rounded-lg bg-orange-500 px-6 py-3 text-sm hover:bg-orange-600">
+              Ürün Ekle
+            </button>
+            <button className="rounded-lg bg-slate-800 px-6 py-3 text-sm hover:bg-slate-700">
+              Talepleri İncele
+            </button>
+            <button className="rounded-lg bg-slate-800 px-6 py-3 text-sm hover:bg-slate-700">
+              Tekliflerim
+            </button>
           </div>
         </div>
 
-        {/* My Products */}
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">Ürünlerim</h2>
-          <div className="bg-white shadow rounded-lg">
+        {/* Tabs */}
+        <div className="mb-8 flex space-x-1 rounded-lg bg-slate-800 p-1">
+          <button
+            onClick={() => setActiveTab('products')}
+            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'products'
+                ? 'bg-orange-500 text-white'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            Ürünlerim ({products.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('offers')}
+            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'offers'
+                ? 'bg-orange-500 text-white'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            Tekliflerim ({offers.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'orders'
+                ? 'bg-orange-500 text-white'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            Siparişler ({orders.length})
+          </button>
+        </div>
+
+        {/* Content */}
+        {activeTab === 'products' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Ürünlerim</h2>
+              <button className="rounded-lg bg-orange-500 px-4 py-2 text-sm hover:bg-orange-600">
+                Yeni Ürün Ekle
+              </button>
+            </div>
+
             {products.length === 0 ? (
-              <p className="p-6 text-gray-500">Henüz ürün eklemediniz.</p>
+              <div className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
+                <p className="text-slate-400">Henüz hiç ürün eklemediniz.</p>
+              </div>
             ) : (
-              <div className="divide-y divide-gray-200">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {products.map((product) => (
-                  <div key={product.id} className="p-6">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h3 className="text-lg font-medium">{product.name}</h3>
-                        <p className="text-sm text-gray-500">
-                          Stok: {product.stock_quantity} | Oluşturulma: {new Date(product.created_at).toLocaleDateString('tr-TR')}
-                        </p>
+                  <div key={product.id} className="rounded-lg border border-slate-800 bg-slate-900 p-6">
+                    <div className="flex flex-col">
+                      <h3 className="text-lg font-semibold">{product.name}</h3>
+                      <p className="mt-2 text-slate-400 text-sm">{product.description}</p>
+                      <div className="mt-4 flex items-center justify-between">
+                        <span className="text-lg font-bold text-orange-400">₺{product.price}</span>
+                        <span className="text-sm text-slate-500">Stok: {product.stock_quantity}</span>
                       </div>
-                      <div className="text-right">
-                        <p className="text-lg font-semibold">${product.price}</p>
-                        <Link
-                          href={`/edit-product/${product.id}`}
-                          className="text-blue-600 hover:text-blue-800 text-sm"
-                        >
+                      <div className="mt-4 flex gap-2">
+                        <button className="flex-1 rounded bg-slate-800 py-2 text-xs hover:bg-slate-700">
                           Düzenle
-                        </Link>
+                        </button>
+                        <button className="flex-1 rounded bg-red-600 py-2 text-xs hover:bg-red-700">
+                          Sil
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -186,31 +267,36 @@ export default function ProducerDashboard() {
               </div>
             )}
           </div>
-        </div>
+        )}
 
-        {/* My Offers */}
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">Tekliflerim</h2>
-          <div className="bg-white shadow rounded-lg">
+        {activeTab === 'offers' && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold">Verdiğim Teklifler</h2>
+
             {offers.length === 0 ? (
-              <p className="p-6 text-gray-500">Henüz teklif vermediniz.</p>
+              <div className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
+                <p className="text-slate-400">Henüz hiç teklif vermediniz.</p>
+              </div>
             ) : (
-              <div className="divide-y divide-gray-200">
+              <div className="grid gap-4">
                 {offers.map((offer) => (
-                  <div key={offer.id} className="p-6">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-lg font-medium">Teklif #{offer.id.slice(-8)}</p>
-                        <p className="text-sm text-gray-500">
-                          Talep ID: {offer.request_id.slice(-8)} | {new Date(offer.created_at).toLocaleDateString('tr-TR')}
-                        </p>
+                  <div key={offer.id} className="rounded-lg border border-slate-800 bg-slate-900 p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold">{offer.request.title}</h3>
+                        <p className="mt-2 text-slate-300">{offer.description}</p>
+                        <div className="mt-4 flex items-center gap-4 text-sm text-slate-500">
+                          <span>Fiyat: ₺{offer.price}</span>
+                          <span>Teslim Süresi: {offer.estimated_time} gün</span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-lg font-semibold">${offer.price}</p>
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          offer.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          offer.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                          'bg-red-100 text-red-800'
+                      <div className="ml-4">
+                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+                          offer.status === 'pending'
+                            ? 'bg-yellow-500/20 text-yellow-400'
+                            : offer.status === 'accepted'
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-red-500/20 text-red-400'
                         }`}>
                           {offer.status === 'pending' ? 'Bekliyor' :
                            offer.status === 'accepted' ? 'Kabul Edildi' : 'Reddedildi'}
@@ -222,41 +308,53 @@ export default function ProducerDashboard() {
               </div>
             )}
           </div>
-        </div>
+        )}
 
-        {/* My Orders */}
-        <div>
-          <h2 className="text-xl font-semibold mb-4">Siparişlerim</h2>
-          <div className="bg-white shadow rounded-lg">
+        {activeTab === 'orders' && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold">Siparişlerim</h2>
+
             {orders.length === 0 ? (
-              <p className="p-6 text-gray-500">Henüz sipariş almadınız.</p>
+              <div className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
+                <p className="text-slate-400">Henüz hiç siparişiniz yok.</p>
+              </div>
             ) : (
-              <div className="divide-y divide-gray-200">
+              <div className="grid gap-4">
                 {orders.map((order) => (
-                  <div key={order.id} className="p-6">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-lg font-medium">Sipariş #{order.id.slice(-8)}</p>
-                        <p className="text-sm text-gray-500">
-                          {new Date(order.created_at).toLocaleDateString('tr-TR')}
-                        </p>
+                  <div key={order.id} className="rounded-lg border border-slate-800 bg-slate-900 p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold">{order.customer.email}</h3>
+                        <div className="mt-4 flex items-center gap-4 text-sm text-slate-500">
+                          <span>Toplam: ₺{order.total_price}</span>
+                          <span>Tarih: {new Date(order.created_at).toLocaleDateString('tr-TR')}</span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-lg font-semibold">${order.total_price}</p>
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          order.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
-                          order.status === 'in_progress' ? 'bg-purple-100 text-purple-800' :
-                          order.status === 'shipped' ? 'bg-indigo-100 text-indigo-800' :
-                          order.status === 'delivered' ? 'bg-green-100 text-green-800' :
-                          'bg-red-100 text-red-800'
+                      <div className="ml-4 flex flex-col gap-2">
+                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+                          order.status === 'pending'
+                            ? 'bg-yellow-500/20 text-yellow-400'
+                            : order.status === 'confirmed'
+                            ? 'bg-blue-500/20 text-blue-400'
+                            : order.status === 'in_progress'
+                            ? 'bg-orange-500/20 text-orange-400'
+                            : order.status === 'shipped'
+                            ? 'bg-purple-500/20 text-purple-400'
+                            : order.status === 'delivered'
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-red-500/20 text-red-400'
                         }`}>
                           {order.status === 'pending' ? 'Bekliyor' :
                            order.status === 'confirmed' ? 'Onaylandı' :
                            order.status === 'in_progress' ? 'Üretimde' :
-                           order.status === 'shipped' ? 'Gönderildi' :
-                           order.status === 'delivered' ? 'Teslim Edildi' : 'İptal'}
+                           order.status === 'shipped' ? 'Kargoda' :
+                           order.status === 'delivered' ? 'Teslim Edildi' : 'İptal Edildi'}
                         </span>
+                        {order.status === 'pending' && (
+                          <button className="rounded bg-green-600 px-3 py-1 text-xs hover:bg-green-700">
+                            Onayla
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -264,7 +362,7 @@ export default function ProducerDashboard() {
               </div>
             )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   )
