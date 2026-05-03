@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '../../../utils/supabase'
+import { supabase } from '../../utils/supabase'
 import { User } from '@supabase/supabase-js'
 
 interface UserProfile {
@@ -17,7 +17,28 @@ interface ProducerProfile {
   description: string
   location: string
   contact_info: { website?: string; phone?: string }
+  business_type: 'sahis' | 'tuzel' | ''
+  tckn: string
+  vkn: string
+  vergi_dairesi: string
+  ticaret_unvani: string
 }
+
+function InputField({
+  label, required, children
+}: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-300 mb-1.5">
+        {label} {required && <span className="text-orange-400">*</span>}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+const inputCls = "w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition"
+const disabledCls = "w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-slate-400 text-sm cursor-not-allowed"
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -28,17 +49,12 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [userProfile, setUserProfile] = useState<UserProfile>({
-    full_name: '',
-    phone: '',
-    role: '',
-  })
+  const [userProfile, setUserProfile] = useState<UserProfile>({ full_name: '', phone: '', role: '' })
 
-  const [producerProfile, setProducerProfile] = useState<ProducerProfile>({
-    company_name: '',
-    description: '',
-    location: '',
+  const [pp, setPp] = useState<ProducerProfile>({
+    company_name: '', description: '', location: '',
     contact_info: { website: '', phone: '' },
+    business_type: '', tckn: '', vkn: '', vergi_dairesi: '', ticaret_unvani: '',
   })
 
   useEffect(() => {
@@ -48,37 +64,29 @@ export default function ProfilePage() {
       setUser(user)
 
       const { data: profile } = await supabase
-        .from('users')
-        .select('full_name, phone, role')
-        .eq('id', user.id)
-        .single()
+        .from('users').select('full_name, phone, role').eq('id', user.id).single()
 
       if (profile) {
         setRole(profile.role ?? '')
-        setUserProfile({
-          full_name: profile.full_name ?? '',
-          phone: profile.phone ?? '',
-          role: profile.role ?? '',
-        })
+        setUserProfile({ full_name: profile.full_name ?? '', phone: profile.phone ?? '', role: profile.role ?? '' })
       }
 
       if (profile?.role === 'producer') {
-        const { data: pp } = await supabase
-          .from('producer_profiles')
-          .select('*')
-          .eq('user_id', user.id)
-          .single()
+        const { data } = await supabase
+          .from('producer_profiles').select('*').eq('user_id', user.id).single()
 
-        if (pp) {
-          setProducerProfile({
-            id: pp.id,
-            company_name: pp.company_name ?? '',
-            description: pp.description ?? '',
-            location: pp.location ?? '',
-            contact_info: {
-              website: pp.contact_info?.website ?? '',
-              phone: pp.contact_info?.phone ?? '',
-            },
+        if (data) {
+          setPp({
+            id: data.id,
+            company_name: data.company_name ?? '',
+            description: data.description ?? '',
+            location: data.location ?? '',
+            contact_info: { website: data.contact_info?.website ?? '', phone: data.contact_info?.phone ?? '' },
+            business_type: data.business_type ?? '',
+            tckn: data.tckn ?? '',
+            vkn: data.vkn ?? '',
+            vergi_dairesi: data.vergi_dairesi ?? '',
+            ticaret_unvani: data.ticaret_unvani ?? '',
           })
         }
       }
@@ -88,47 +96,59 @@ export default function ProfilePage() {
     init()
   }, [router])
 
+  const validate = (): string | null => {
+    if (role === 'producer') {
+      if (!pp.business_type) return 'Lütfen işletme türünü seçin.'
+      if (pp.business_type === 'sahis') {
+        if (!pp.tckn) return 'TCKN zorunludur.'
+        if (!/^\d{11}$/.test(pp.tckn)) return 'TCKN 11 haneli rakamlardan oluşmalıdır.'
+      }
+      if (pp.business_type === 'tuzel') {
+        if (!pp.vkn) return 'Vergi Kimlik Numarası zorunludur.'
+        if (!/^\d{10}$/.test(pp.vkn)) return 'VKN 10 haneli rakamlardan oluşmalıdır.'
+        if (!pp.ticaret_unvani) return 'Ticaret ünvanı zorunludur.'
+      }
+      if (!pp.vergi_dairesi) return 'Vergi dairesi zorunludur.'
+      if (!pp.company_name) return 'Firma adı zorunludur.'
+    }
+    return null
+  }
+
   const handleSave = async (e: { preventDefault(): void }) => {
     e.preventDefault()
+    const validationError = validate()
+    if (validationError) { setError(validationError); return }
+
     setSaving(true)
     setError(null)
     setSuccess(false)
 
-    // Save to users table
     const { error: userErr } = await supabase
       .from('users')
-      .update({
-        full_name: userProfile.full_name,
-        phone: userProfile.phone,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ full_name: userProfile.full_name, phone: userProfile.phone, updated_at: new Date().toISOString() })
       .eq('id', user!.id)
 
-    if (userErr) {
-      setError(`Profil kaydedilemedi: ${userErr.message}`)
-      setSaving(false)
-      return
-    }
+    if (userErr) { setError(`Profil kaydedilemedi: ${userErr.message}`); setSaving(false); return }
 
-    // If producer, save producer profile
     if (role === 'producer') {
       const payload = {
         user_id: user!.id,
-        company_name: producerProfile.company_name,
-        description: producerProfile.description,
-        location: producerProfile.location,
-        contact_info: producerProfile.contact_info,
+        company_name: pp.company_name,
+        description: pp.description,
+        location: pp.location,
+        contact_info: pp.contact_info,
+        business_type: pp.business_type,
+        tckn: pp.business_type === 'sahis' ? pp.tckn : null,
+        vkn: pp.business_type === 'tuzel' ? pp.vkn : null,
+        vergi_dairesi: pp.vergi_dairesi,
+        ticaret_unvani: pp.business_type === 'tuzel' ? pp.ticaret_unvani : null,
       }
 
-      const { error: ppErr } = producerProfile.id
-        ? await supabase.from('producer_profiles').update(payload).eq('id', producerProfile.id)
+      const { error: ppErr } = pp.id
+        ? await supabase.from('producer_profiles').update(payload).eq('id', pp.id)
         : await supabase.from('producer_profiles').insert(payload)
 
-      if (ppErr) {
-        setError(`Firma profili kaydedilemedi: ${ppErr.message}`)
-        setSaving(false)
-        return
-      }
+      if (ppErr) { setError(`Firma profili kaydedilemedi: ${ppErr.message}`); setSaving(false); return }
     }
 
     setSuccess(true)
@@ -149,14 +169,10 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-      {/* Header */}
       <header className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="text-slate-400 hover:text-white transition-colors"
-            >
+            <button onClick={() => router.push('/dashboard')} className="text-slate-400 hover:text-white transition-colors">
               ← Geri
             </button>
             <span className="text-slate-600">|</span>
@@ -173,142 +189,184 @@ export default function ProfilePage() {
         </div>
 
         <form onSubmit={handleSave} className="space-y-6">
-          {/* Account info (read-only) */}
+
+          {/* Hesap bilgileri (read-only) */}
           <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Hesap Bilgileri</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-slate-400 mb-1.5">E-posta</label>
-                <input
-                  type="text"
-                  value={user?.email ?? ''}
-                  disabled
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-slate-400 text-sm cursor-not-allowed"
-                />
+                <input type="text" value={user?.email ?? ''} disabled className={disabledCls} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-400 mb-1.5">Rol</label>
-                <input
-                  type="text"
-                  value={role === 'customer' ? 'Müşteri' : role === 'producer' ? 'Üretici' : ''}
-                  disabled
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-slate-400 text-sm cursor-not-allowed"
-                />
+                <input type="text" value={role === 'customer' ? 'Müşteri' : 'Üretici'} disabled className={disabledCls} />
               </div>
             </div>
           </section>
 
-          {/* Personal info */}
+          {/* Kişisel bilgiler */}
           <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Kişisel Bilgiler</h2>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">Ad Soyad</label>
-                <input
-                  type="text"
-                  value={userProfile.full_name}
+              <InputField label="Ad Soyad">
+                <input type="text" value={userProfile.full_name} placeholder="Adınız ve soyadınız"
                   onChange={e => setUserProfile(p => ({ ...p, full_name: e.target.value }))}
-                  placeholder="Adınız ve soyadınız"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">Telefon</label>
-                <input
-                  type="tel"
-                  value={userProfile.phone}
+                  className={inputCls} />
+              </InputField>
+              <InputField label="Telefon">
+                <input type="tel" value={userProfile.phone} placeholder="+90 5xx xxx xx xx"
                   onChange={e => setUserProfile(p => ({ ...p, phone: e.target.value }))}
-                  placeholder="+90 5xx xxx xx xx"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition"
-                />
-              </div>
+                  className={inputCls} />
+              </InputField>
             </div>
           </section>
 
-          {/* Producer-only section */}
+          {/* Üretici firma bilgileri */}
           {role === 'producer' && (
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Firma Bilgileri</h2>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Firma Adı <span className="text-orange-400">*</span></label>
-                  <input
-                    type="text"
-                    required
-                    value={producerProfile.company_name}
-                    onChange={e => setProducerProfile(p => ({ ...p, company_name: e.target.value }))}
-                    placeholder="Firma adınız"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition"
-                  />
+            <>
+              {/* İşletme türü seçimi */}
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">İşletme Türü</h2>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    { value: 'sahis', label: 'Şahıs Şirketi', desc: 'Gerçek kişi — TCKN ile', icon: '👤' },
+                    { value: 'tuzel', label: 'Tüzel Kişi', desc: 'Ltd., A.Ş. vb. — VKN ile', icon: '🏢' },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setPp(p => ({ ...p, business_type: opt.value as 'sahis' | 'tuzel' }))}
+                      className={`rounded-xl border p-4 text-left transition-all ${
+                        pp.business_type === opt.value
+                          ? 'border-orange-500 bg-orange-500/10 ring-1 ring-orange-500/40'
+                          : 'border-slate-700 hover:border-slate-500'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-lg">{opt.icon}</span>
+                        <span className="font-semibold text-sm">{opt.label}</span>
+                        {pp.business_type === opt.value && (
+                          <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-orange-500">
+                            <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400">{opt.desc}</p>
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Konum</label>
-                  <input
-                    type="text"
-                    value={producerProfile.location}
-                    onChange={e => setProducerProfile(p => ({ ...p, location: e.target.value }))}
-                    placeholder="İstanbul, Türkiye"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition"
-                  />
+
+                {/* Şahıs → TCKN */}
+                {pp.business_type === 'sahis' && (
+                  <div className="pt-2">
+                    <InputField label="T.C. Kimlik Numarası (TCKN)" required>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={11}
+                        value={pp.tckn}
+                        onChange={e => setPp(p => ({ ...p, tckn: e.target.value.replace(/\D/g, '') }))}
+                        placeholder="11 haneli TCKN"
+                        className={inputCls}
+                      />
+                      {pp.tckn && pp.tckn.length !== 11 && (
+                        <p className="mt-1 text-xs text-red-400">TCKN 11 hane olmalıdır ({pp.tckn.length}/11)</p>
+                      )}
+                    </InputField>
+                  </div>
+                )}
+
+                {/* Tüzel → VKN + Ticaret Ünvanı */}
+                {pp.business_type === 'tuzel' && (
+                  <div className="grid gap-4 sm:grid-cols-2 pt-2">
+                    <InputField label="Vergi Kimlik Numarası (VKN)" required>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={10}
+                        value={pp.vkn}
+                        onChange={e => setPp(p => ({ ...p, vkn: e.target.value.replace(/\D/g, '') }))}
+                        placeholder="10 haneli VKN"
+                        className={inputCls}
+                      />
+                      {pp.vkn && pp.vkn.length !== 10 && (
+                        <p className="mt-1 text-xs text-red-400">VKN 10 hane olmalıdır ({pp.vkn.length}/10)</p>
+                      )}
+                    </InputField>
+                    <InputField label="Ticaret Ünvanı" required>
+                      <input
+                        type="text"
+                        value={pp.ticaret_unvani}
+                        onChange={e => setPp(p => ({ ...p, ticaret_unvani: e.target.value }))}
+                        placeholder="Örn: Tiridy Teknoloji A.Ş."
+                        className={inputCls}
+                      />
+                    </InputField>
+                  </div>
+                )}
+
+                {/* Vergi dairesi — her iki tür için */}
+                {pp.business_type && (
+                  <InputField label="Vergi Dairesi" required>
+                    <input
+                      type="text"
+                      value={pp.vergi_dairesi}
+                      onChange={e => setPp(p => ({ ...p, vergi_dairesi: e.target.value }))}
+                      placeholder="Örn: Kadıköy Vergi Dairesi"
+                      className={inputCls}
+                    />
+                  </InputField>
+                )}
+              </section>
+
+              {/* Firma genel bilgileri */}
+              <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Firma Bilgileri</h2>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <InputField label="Firma / Marka Adı" required>
+                    <input type="text" value={pp.company_name} placeholder="Görünen firma adı"
+                      onChange={e => setPp(p => ({ ...p, company_name: e.target.value }))}
+                      className={inputCls} />
+                  </InputField>
+                  <InputField label="Konum">
+                    <input type="text" value={pp.location} placeholder="İstanbul, Türkiye"
+                      onChange={e => setPp(p => ({ ...p, location: e.target.value }))}
+                      className={inputCls} />
+                  </InputField>
+                  <InputField label="İletişim Telefonu">
+                    <input type="tel" value={pp.contact_info.phone ?? ''} placeholder="+90 2xx xxx xx xx"
+                      onChange={e => setPp(p => ({ ...p, contact_info: { ...p.contact_info, phone: e.target.value } }))}
+                      className={inputCls} />
+                  </InputField>
+                  <InputField label="Web Sitesi">
+                    <input type="url" value={pp.contact_info.website ?? ''} placeholder="https://firmaniz.com"
+                      onChange={e => setPp(p => ({ ...p, contact_info: { ...p.contact_info, website: e.target.value } }))}
+                      className={inputCls} />
+                  </InputField>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">İletişim Telefonu</label>
-                  <input
-                    type="tel"
-                    value={producerProfile.contact_info.phone ?? ''}
-                    onChange={e => setProducerProfile(p => ({ ...p, contact_info: { ...p.contact_info, phone: e.target.value } }))}
-                    placeholder="+90 2xx xxx xx xx"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Web Sitesi</label>
-                  <input
-                    type="url"
-                    value={producerProfile.contact_info.website ?? ''}
-                    onChange={e => setProducerProfile(p => ({ ...p, contact_info: { ...p.contact_info, website: e.target.value } }))}
-                    placeholder="https://firmaniz.com"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">Firma Açıklaması</label>
-                <textarea
-                  rows={4}
-                  value={producerProfile.description}
-                  onChange={e => setProducerProfile(p => ({ ...p, description: e.target.value }))}
-                  placeholder="Firmanız, uzmanlık alanlarınız ve sunduğunuz hizmetler hakkında kısa bilgi..."
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition resize-none"
-                />
-              </div>
-            </section>
+                <InputField label="Firma Açıklaması">
+                  <textarea rows={4} value={pp.description}
+                    onChange={e => setPp(p => ({ ...p, description: e.target.value }))}
+                    placeholder="Firmanız, uzmanlık alanlarınız ve sunduğunuz hizmetler hakkında kısa bilgi..."
+                    className={`${inputCls} resize-none`} />
+                </InputField>
+              </section>
+            </>
           )}
 
-          {/* Feedback */}
-          {error && (
-            <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</p>
-          )}
-          {success && (
-            <p className="rounded-xl bg-green-500/10 px-4 py-3 text-sm text-green-400">
-              ✓ Profil başarıyla kaydedildi.
-            </p>
-          )}
+          {error && <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</p>}
+          {success && <p className="rounded-xl bg-green-500/10 px-4 py-3 text-sm text-green-400">✓ Profil başarıyla kaydedildi.</p>}
 
-          {/* Actions */}
           <div className="flex items-center justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => router.push('/dashboard')}
-              className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm text-slate-400 hover:border-slate-500 hover:text-white transition-colors"
-            >
+            <button type="button" onClick={() => router.push('/dashboard')}
+              className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm text-slate-400 hover:border-slate-500 hover:text-white transition-colors">
               İptal
             </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-xl bg-orange-500 px-6 py-2.5 text-sm font-semibold text-slate-950 hover:bg-orange-400 disabled:opacity-60 transition-colors"
-            >
+            <button type="submit" disabled={saving}
+              className="rounded-xl bg-orange-500 px-6 py-2.5 text-sm font-semibold text-slate-950 hover:bg-orange-400 disabled:opacity-60 transition-colors">
               {saving ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
             </button>
           </div>
