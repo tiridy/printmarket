@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { Auth } from '@supabase/auth-ui-react'
 import { ThemeSupa } from '@supabase/auth-ui-shared'
@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 
 export default function Login() {
   const router = useRouter()
-  const [redirectTo, setRedirectTo] = useState('')
+  const [redirectTo, setRedirectTo] = useState<string | null>(null)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -39,33 +39,37 @@ export default function Login() {
           </p>
         </div>
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          <Auth
-            supabaseClient={supabase}
-            appearance={{ theme: ThemeSupa }}
-            providers={['google', 'apple']}
-            redirectTo={redirectTo}
-            onlyThirdPartyProviders={false}
-            localization={{
-              variables: {
-                sign_in: {
-                  email_label: 'E-posta adresi',
-                  password_label: 'Şifre',
-                  button_label: 'Giriş Yap',
-                  loading_button_label: 'Giriş yapılıyor...',
-                  social_provider_text: '{{provider}} ile giriş yap',
-                  link_text: 'Hesabınız yok mu? Kayıt olun',
+          {redirectTo ? (
+            <Auth
+              supabaseClient={supabase}
+              appearance={{ theme: ThemeSupa }}
+              providers={['google', 'apple']}
+              redirectTo={redirectTo}
+              onlyThirdPartyProviders={false}
+              localization={{
+                variables: {
+                  sign_in: {
+                    email_label: 'E-posta adresi',
+                    password_label: 'Şifre',
+                    button_label: 'Giriş Yap',
+                    loading_button_label: 'Giriş yapılıyor...',
+                    social_provider_text: '{{provider}} ile giriş yap',
+                    link_text: 'Zaten hesabınız yok mu? Kayıt olun',
+                  },
+                  sign_up: {
+                    email_label: 'E-posta adresi',
+                    password_label: 'Şifre',
+                    button_label: 'Kayıt Ol',
+                    loading_button_label: 'Kayıt olunuyor...',
+                    social_provider_text: '{{provider}} ile kayıt ol',
+                    link_text: 'Zaten hesabınız var mı? Giriş yapın',
+                  },
                 },
-                sign_up: {
-                  email_label: 'E-posta adresi',
-                  password_label: 'Şifre',
-                  button_label: 'Kayıt Ol',
-                  loading_button_label: 'Kayıt olunuyor...',
-                  social_provider_text: '{{provider}} ile kayıt ol',
-                  link_text: 'Zaten hesabınız var mı? Giriş yapın',
-                },
-              },
-            }}
-          />
+              }}
+            />
+          ) : (
+            <div className="py-10 text-center text-slate-500">Yönlendirme hazırlanıyor...</div>
+          )}
         </div>
       </div>
     </div>
