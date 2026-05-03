@@ -13,7 +13,7 @@ export default async function Home() {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
           <div>
             <Link href="/" className="text-2xl font-bold tracking-tight text-orange-400">
-              PrintMarket
+              TİRİDY
             </Link>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -45,7 +45,7 @@ export default async function Home() {
                 Tasarımınızı hayata geçir, işini büyüt.
               </h1>
               <p className="mt-6 max-w-xl text-slate-300 sm:text-lg">
-                PrintMarket, müşterilerin taleplerini üreticilerle eşleştiren modern bir 3D baskı pazaryeri.
+                TİRİDY, müşterilerin taleplerini üreticilerle eşleştiren modern bir 3D baskı pazaryeri.
                 Talep oluştur, teklif al ve sipariş yönetimini tek yerden yap.
               </p>
               <div className="mt-10 flex flex-col gap-4 sm:flex-row">
@@ -129,11 +129,7 @@ export default async function Home() {
                 <p className="text-sm font-semibold uppercase tracking-[0.3em] text-orange-400">Nasıl Çalışır</p>
                 <h2 className="text-4xl font-semibold text-white">Teknik baskı sürecini 3 adımda yönetin</h2>
                 <p className="text-slate-400">
-                  PrintMarket ile talep oluşturun, üreticilerle eşleşin ve siparişinizi güvenli ödeme altyapısıyla tamamlayın.
-                </p>
-              </div>
-
-              <div className="space-y-6">
+                  TİRİDY ile talep oluşturun, üreticilerle eşleşin ve siparişinizi güvenli ödeme altyapısıyla tamamlayın.
                 {[
                   {
                     title: '1. Talebini Oluştur',
@@ -164,7 +160,7 @@ export default async function Home() {
 
       <footer className="border-t border-slate-800 bg-slate-950/95 py-10">
         <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 text-slate-400 md:flex-row md:items-center md:justify-between">
-          <p>© 2026 PrintMarket. 3D baskı üreticileri ve müşterileri için özel platform.</p>
+          <p>© 2026 TİRİDY. 3D baskı üreticileri ve müşterileri için özel platform.</p>
           <div className="flex flex-wrap gap-4 text-sm text-slate-500">
             <Link href="#" className="hover:text-orange-400">Hizmet Şartları</Link>
             <Link href="#" className="hover:text-orange-400">Gizlilik Politikası</Link>
