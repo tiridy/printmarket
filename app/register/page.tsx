@@ -12,7 +12,7 @@ export default function Register() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setRedirectTo(`${window.location.origin}/dashboard`)
+      setRedirectTo(`${window.location.origin}/auth/callback`)
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
