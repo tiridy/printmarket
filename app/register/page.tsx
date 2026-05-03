@@ -6,7 +6,7 @@ import { supabase } from '../utils/supabase'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
-export default function Login() {
+export default function Register() {
   const router = useRouter()
   const [redirectTo, setRedirectTo] = useState('')
 
@@ -29,12 +29,12 @@ export default function Login() {
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            TİRİDY'ye Giriş Yapın
+            TİRİDY'ye Kayıt Ol
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Hesabınız yok mu?{' '}
-            <a href="/register" className="font-medium text-blue-600 hover:text-blue-500">
-              Kayıt olun
+            Zaten hesabınız var mı?{' '}
+            <a href="/login" className="font-medium text-blue-600 hover:text-blue-500">
+              Giriş yapın
             </a>
           </p>
         </div>
@@ -42,19 +42,12 @@ export default function Login() {
           <Auth
             supabaseClient={supabase}
             appearance={{ theme: ThemeSupa }}
+            view="sign_up"
             providers={['google', 'apple']}
             redirectTo={redirectTo}
             onlyThirdPartyProviders={false}
             localization={{
               variables: {
-                sign_in: {
-                  email_label: 'E-posta adresi',
-                  password_label: 'Şifre',
-                  button_label: 'Giriş Yap',
-                  loading_button_label: 'Giriş yapılıyor...',
-                  social_provider_text: '{{provider}} ile giriş yap',
-                  link_text: 'Hesabınız yok mu? Kayıt olun',
-                },
                 sign_up: {
                   email_label: 'E-posta adresi',
                   password_label: 'Şifre',
