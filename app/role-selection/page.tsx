@@ -39,14 +39,14 @@ export default function RoleSelection() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
 
-    const { error } = await supabase.from('users').upsert({
-      id: user.id,
-      email: user.email,
-      role: selected,
-    })
+    const { error } = await supabase.from('users').upsert(
+      { id: user.id, email: user.email, role: selected },
+      { onConflict: 'id' }
+    )
 
     if (error) {
-      setError('Rol kaydedilemedi. Lütfen tekrar deneyin.')
+      console.error('[role-selection] upsert hatası:', error)
+      setError(`Rol kaydedilemedi: ${error.message}`)
       setSaving(false)
       return
     }

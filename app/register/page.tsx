@@ -26,11 +26,13 @@ export default function Register() {
   }
 
   async function handleGoogleLogin() {
-    await supabase.auth.signInWithOAuth({ provider: 'google' })
+    const redirectTo = `${window.location.origin}/auth/callback`
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
   }
 
   async function handleAppleLogin() {
-    await supabase.auth.signInWithOAuth({ provider: 'apple' })
+    const redirectTo = `${window.location.origin}/auth/callback`
+    await supabase.auth.signInWithOAuth({ provider: 'apple', options: { redirectTo } })
   }
 
   if (success) {

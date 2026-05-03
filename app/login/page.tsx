@@ -28,16 +28,20 @@ export default function Login() {
   }
 
   async function handleGoogleLogin() {
-    console.log('[login] Google OAuth başlatılıyor — redirectTo YOK, Supabase varsayılanı kullanılıyor')
+    const redirectTo = `${window.location.origin}/auth/callback`
+    console.log('[login] Google OAuth — redirectTo:', redirectTo)
     await supabase.auth.signInWithOAuth({
       provider: 'google',
+      options: { redirectTo },
     })
   }
 
   async function handleAppleLogin() {
-    console.log('[login] Apple OAuth başlatılıyor — redirectTo YOK, Supabase varsayılanı kullanılıyor')
+    const redirectTo = `${window.location.origin}/auth/callback`
+    console.log('[login] Apple OAuth — redirectTo:', redirectTo)
     await supabase.auth.signInWithOAuth({
       provider: 'apple',
+      options: { redirectTo },
     })
   }
 
