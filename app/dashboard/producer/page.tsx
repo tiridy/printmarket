@@ -163,9 +163,13 @@ export default function ProducerDashboard() {
               <p className="text-sm font-medium text-slate-200">{profile?.company_name ?? user?.email}</p>
               <p className="text-xs text-slate-500">Üretici</p>
             </div>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-500/20 text-sm font-bold text-orange-400">
+            <button
+              onClick={() => router.push('/dashboard/profile')}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-500/20 text-sm font-bold text-orange-400 hover:bg-orange-500/30 transition-colors"
+              title="Profil Ayarları"
+            >
               {user?.email ? initials(user.email) : '?'}
-            </div>
+            </button>
             <button
               onClick={handleLogout}
               className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-500 hover:text-slate-200 transition-colors"
