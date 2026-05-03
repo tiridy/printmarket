@@ -9,6 +9,24 @@ export default function AuthCallback() {
   const [status, setStatus] = useState('Oturum oluşturuluyor...')
 
   useEffect(() => {
+    const redirectByRole = async (userId: string) => {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .single()
+
+      console.log('[auth/callback] Rol kontrolü:', { userId, role: profile?.role ?? 'yok' })
+
+      if (profile?.role) {
+        console.log('[auth/callback] Rol mevcut → /dashboard')
+        router.push('/dashboard')
+      } else {
+        console.log('[auth/callback] Rol yok → /role-selection')
+        router.push('/role-selection')
+      }
+    }
+
     const handleCallback = async () => {
       const params = new URLSearchParams(window.location.search)
       const code = params.get('code')
@@ -43,19 +61,17 @@ export default function AuthCallback() {
         }
 
         if (data.session) {
-          console.log('[auth/callback] Session oluştu! /role-selection sayfasına yönlendiriliyor')
-          router.push('/role-selection')
+          await redirectByRole(data.session.user.id)
           return
         }
       }
 
-      // Fallback: mevcut session kontrolü (implicit flow veya mevcut oturum)
+      // Fallback: mevcut session kontrolü
       const { data: { session } } = await supabase.auth.getSession()
       console.log('[auth/callback] Mevcut session:', session?.user?.email ?? 'yok')
 
       if (session) {
-        console.log('[auth/callback] Mevcut session bulundu, /role-selection sayfasına yönlendiriliyor')
-        router.push('/role-selection')
+        await redirectByRole(session.user.id)
         return
       }
 
