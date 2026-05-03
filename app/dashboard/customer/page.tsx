@@ -5,14 +5,14 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../utils/supabase'
 import { User } from '@supabase/supabase-js'
 
-interface Request {
+interface PrintRequest {
   id: string
   title: string
   description: string
   category: string
   budget: number
   deadline: string
-  status: string
+  status: 'open' | 'closed' | 'completed'
   created_at: string
 }
 
@@ -21,94 +21,82 @@ interface Offer {
   price: number
   description: string
   estimated_time: number
-  status: string
-  producer: {
-    company_name: string
-  }
-  request: {
-    title: string
-  }
+  status: 'pending' | 'accepted' | 'rejected'
+  producer: { company_name: string }
+  request: { title: string }
 }
 
 interface Order {
   id: string
   total_price: number
-  status: string
+  status: 'pending' | 'confirmed' | 'in_progress' | 'shipped' | 'delivered' | 'cancelled'
   created_at: string
-  producer: {
-    company_name: string
-  }
+  producer: { company_name: string }
+}
+
+type Tab = 'requests' | 'offers' | 'orders'
+
+const STATUS_REQUEST: Record<string, { label: string; cls: string }> = {
+  open:      { label: 'Açık',      cls: 'bg-green-500/15 text-green-400' },
+  closed:    { label: 'Kapalı',    cls: 'bg-slate-500/15 text-slate-400' },
+  completed: { label: 'Tamamlandı', cls: 'bg-blue-500/15 text-blue-400' },
+}
+
+const STATUS_ORDER: Record<string, { label: string; cls: string }> = {
+  pending:     { label: 'Bekliyor',       cls: 'bg-yellow-500/15 text-yellow-400' },
+  confirmed:   { label: 'Onaylandı',      cls: 'bg-blue-500/15 text-blue-400' },
+  in_progress: { label: 'Üretimde',       cls: 'bg-orange-500/15 text-orange-400' },
+  shipped:     { label: 'Kargoda',        cls: 'bg-purple-500/15 text-purple-400' },
+  delivered:   { label: 'Teslim Edildi',  cls: 'bg-green-500/15 text-green-400' },
+  cancelled:   { label: 'İptal Edildi',   cls: 'bg-red-500/15 text-red-400' },
+}
+
+function initials(email: string) {
+  return email.slice(0, 2).toUpperCase()
+}
+
+function Badge({ status, map }: { status: string; map: Record<string, { label: string; cls: string }> }) {
+  const s = map[status] ?? { label: status, cls: 'bg-slate-500/15 text-slate-400' }
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${s.cls}`}>
+      {s.label}
+    </span>
+  )
 }
 
 export default function CustomerDashboard() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
-  const [requests, setRequests] = useState<Request[]>([])
+  const [requests, setRequests] = useState<PrintRequest[]>([])
   const [offers, setOffers] = useState<Offer[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('requests')
+  const [tab, setTab] = useState<Tab>('requests')
 
   useEffect(() => {
-    const getUser = async () => {
+    const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login'); return }
+
+      const { data: userData } = await supabase
+        .from('users').select('role').eq('id', user.id).single()
+
+      if (userData?.role !== 'customer') { router.push('/dashboard'); return }
+
       setUser(user)
 
-      if (!user) {
-        router.push('/login')
-        return
-      }
+      const [{ data: req }, { data: off }, { data: ord }] = await Promise.all([
+        supabase.from('requests').select('*').eq('customer_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('offers').select('*, producer:producer_profiles(company_name), request:requests(title)').eq('request.customer_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('orders').select('*, producer:producer_profiles(company_name)').eq('customer_id', user.id).order('created_at', { ascending: false }),
+      ])
 
-      // Kullanıcı rolünü kontrol et
-      const { data: userData } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-      if (userData?.role !== 'customer') {
-        router.push('/dashboard')
-        return
-      }
-
-      // Talepleri yükle
-      const { data: requestsData } = await supabase
-        .from('requests')
-        .select('*')
-        .eq('customer_id', user.id)
-        .order('created_at', { ascending: false })
-
-      setRequests(requestsData || [])
-
-      // Teklifleri yükle
-      const { data: offersData } = await supabase
-        .from('offers')
-        .select(`
-          *,
-          producer:producer_profiles(company_name),
-          request:requests(title)
-        `)
-        .eq('request.customer_id', user.id)
-        .order('created_at', { ascending: false })
-
-      setOffers(offersData || [])
-
-      // Siparişleri yükle
-      const { data: ordersData } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          producer:producer_profiles(company_name)
-        `)
-        .eq('customer_id', user.id)
-        .order('created_at', { ascending: false })
-
-      setOrders(ordersData || [])
-
+      setRequests(req ?? [])
+      setOffers(off ?? [])
+      setOrders(ord ?? [])
       setLoading(false)
     }
-
-    getUser()
+    init()
   }, [router])
 
   const handleLogout = async () => {
@@ -119,228 +107,239 @@ export default function CustomerDashboard() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <div className="text-white">Yükleniyor...</div>
+        <div className="flex items-center gap-3 text-slate-400">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-600 border-t-orange-400" />
+          Yükleniyor...
+        </div>
       </div>
     )
   }
 
+  const openRequests = requests.filter(r => r.status === 'open').length
+  const pendingOffers = offers.filter(o => o.status === 'pending').length
+  const activeOrders = orders.filter(o => ['confirmed', 'in_progress', 'shipped'].includes(o.status)).length
+
+  const tabs: { key: Tab; label: string; count: number }[] = [
+    { key: 'requests', label: 'Taleplerim', count: requests.length },
+    { key: 'offers',   label: 'Teklifler',  count: offers.length },
+    { key: 'orders',   label: 'Siparişler', count: orders.length },
+  ]
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/95">
-        <div className="mx-auto max-w-7xl px-6 py-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-orange-400">TİRİDY - Müşteri Paneli</h1>
-            <div className="flex items-center gap-4">
-              <span className="text-slate-300">{user?.email}</span>
-              <button
-                onClick={handleLogout}
-                className="rounded-lg bg-slate-800 px-4 py-2 text-sm hover:bg-slate-700"
-              >
-                Çıkış Yap
-              </button>
+      <header className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+          <span className="text-xl font-bold tracking-tight text-orange-400">TİRİDY</span>
+          <div className="flex items-center gap-3">
+            <div className="hidden text-right sm:block">
+              <p className="text-sm font-medium text-slate-200">{user?.email}</p>
+              <p className="text-xs text-slate-500">Müşteri</p>
             </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-500/20 text-sm font-bold text-orange-400">
+              {user?.email ? initials(user.email) : '?'}
+            </div>
+            <button
+              onClick={handleLogout}
+              className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-500 hover:text-slate-200 transition-colors"
+            >
+              Çıkış
+            </button>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        {/* Quick Actions */}
-        <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900 p-6">
-          <h2 className="mb-4 text-xl font-semibold">Hızlı İşlemler</h2>
-          <div className="flex flex-wrap gap-4">
-            <button className="rounded-lg bg-orange-500 px-6 py-3 text-sm hover:bg-orange-600">
-              Yeni Talep Oluştur
-            </button>
-            <button className="rounded-lg bg-slate-800 px-6 py-3 text-sm hover:bg-slate-700">
-              Ürünlere Göz At
-            </button>
-          </div>
+      <main className="mx-auto max-w-7xl px-6 py-8 space-y-8">
+        {/* Welcome */}
+        <div>
+          <h1 className="text-2xl font-bold">Müşteri Paneli</h1>
+          <p className="mt-1 text-slate-400">Taleplerinizi, tekliflerinizi ve siparişlerinizi buradan yönetin.</p>
+        </div>
+
+        {/* Stats */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            { label: 'Açık Talep', value: openRequests,   icon: '📋', color: 'text-blue-400' },
+            { label: 'Bekleyen Teklif', value: pendingOffers, icon: '💬', color: 'text-yellow-400' },
+            { label: 'Aktif Sipariş', value: activeOrders,  icon: '📦', color: 'text-orange-400' },
+          ].map(s => (
+            <div key={s.label} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-slate-400">{s.label}</p>
+                <span className="text-xl">{s.icon}</span>
+              </div>
+              <p className={`mt-2 text-3xl font-bold ${s.color}`}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* CTA */}
+        <div className="flex flex-wrap gap-3">
+          <button className="rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-orange-400 transition-colors">
+            + Yeni Talep Oluştur
+          </button>
+          <button className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm text-slate-300 hover:border-slate-500 hover:text-white transition-colors">
+            Ürünlere Göz At
+          </button>
         </div>
 
         {/* Tabs */}
-        <div className="mb-8 flex space-x-1 rounded-lg bg-slate-800 p-1">
-          <button
-            onClick={() => setActiveTab('requests')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'requests'
-                ? 'bg-orange-500 text-white'
-                : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            Taleplerim ({requests.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('offers')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'offers'
-                ? 'bg-orange-500 text-white'
-                : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            Teklifler ({offers.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('orders')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'orders'
-                ? 'bg-orange-500 text-white'
-                : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            Siparişlerim ({orders.length})
-          </button>
-        </div>
-
-        {/* Content */}
-        {activeTab === 'requests' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Taleplerim</h2>
-              <button className="rounded-lg bg-orange-500 px-4 py-2 text-sm hover:bg-orange-600">
-                Yeni Talep Oluştur
+        <div>
+          <div className="flex gap-1 rounded-xl bg-slate-900 p-1 w-fit">
+            {tabs.map(t => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  tab === t.key
+                    ? 'bg-orange-500 text-slate-950'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {t.label}
+                <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${
+                  tab === t.key ? 'bg-slate-950/30 text-slate-950' : 'bg-slate-800 text-slate-500'
+                }`}>
+                  {t.count}
+                </span>
               </button>
+            ))}
+          </div>
+
+          {/* Requests */}
+          {tab === 'requests' && (
+            <div className="mt-6 space-y-3">
+              {requests.length === 0 ? (
+                <EmptyState
+                  icon="📋"
+                  title="Henüz talep oluşturmadınız"
+                  description="İlk 3D baskı talebinizi oluşturun, üreticilerden teklif alın."
+                  action="Yeni Talep Oluştur"
+                />
+              ) : requests.map(r => (
+                <div key={r.id} className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-slate-100">{r.title}</h3>
+                        <Badge status={r.status} map={STATUS_REQUEST} />
+                      </div>
+                      <p className="mt-1.5 text-sm text-slate-400 line-clamp-2">{r.description}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                        <span>🏷 {r.category}</span>
+                        <span>💰 ₺{r.budget.toLocaleString('tr-TR')}</span>
+                        <span>📅 {new Date(r.deadline).toLocaleDateString('tr-TR')}</span>
+                      </div>
+                    </div>
+                    <button className="shrink-0 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-500 transition-colors">
+                      Detay
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
+          )}
 
-            {requests.length === 0 ? (
-              <div className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
-                <p className="text-slate-400">Henüz hiç talep oluşturmadınız.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {requests.map((request) => (
-                  <div key={request.id} className="rounded-lg border border-slate-800 bg-slate-900 p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold">{request.title}</h3>
-                        <p className="mt-2 text-slate-400">{request.description}</p>
-                        <div className="mt-4 flex items-center gap-4 text-sm text-slate-500">
-                          <span>Kategori: {request.category}</span>
-                          <span>Bütçe: ₺{request.budget}</span>
-                          <span>Son Tarih: {new Date(request.deadline).toLocaleDateString('tr-TR')}</span>
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          request.status === 'open'
-                            ? 'bg-green-500/20 text-green-400'
-                            : request.status === 'closed'
-                            ? 'bg-red-500/20 text-red-400'
-                            : 'bg-blue-500/20 text-blue-400'
+          {/* Offers */}
+          {tab === 'offers' && (
+            <div className="mt-6 space-y-3">
+              {offers.length === 0 ? (
+                <EmptyState
+                  icon="💬"
+                  title="Henüz teklif almadınız"
+                  description="Bir talep oluşturduktan sonra üreticiler size teklif gönderecektir."
+                />
+              ) : offers.map(o => (
+                <div key={o.id} className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-slate-100">{o.producer.company_name}</h3>
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                          o.status === 'pending'  ? 'bg-yellow-500/15 text-yellow-400' :
+                          o.status === 'accepted' ? 'bg-green-500/15 text-green-400' :
+                                                    'bg-red-500/15 text-red-400'
                         }`}>
-                          {request.status === 'open' ? 'Açık' :
-                           request.status === 'closed' ? 'Kapalı' : 'Tamamlandı'}
+                          {o.status === 'pending' ? 'Bekliyor' : o.status === 'accepted' ? 'Kabul Edildi' : 'Reddedildi'}
                         </span>
                       </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'offers' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold">Gelen Teklifler</h2>
-
-            {offers.length === 0 ? (
-              <div className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
-                <p className="text-slate-400">Henüz hiç teklif almadınız.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {offers.map((offer) => (
-                  <div key={offer.id} className="rounded-lg border border-slate-800 bg-slate-900 p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold">{offer.producer.company_name}</h3>
-                        <p className="text-slate-400">{offer.request.title}</p>
-                        <p className="mt-2 text-slate-300">{offer.description}</p>
-                        <div className="mt-4 flex items-center gap-4 text-sm text-slate-500">
-                          <span>Fiyat: ₺{offer.price}</span>
-                          <span>Teslim Süresi: {offer.estimated_time} gün</span>
-                        </div>
-                      </div>
-                      <div className="ml-4 flex flex-col gap-2">
-                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          offer.status === 'pending'
-                            ? 'bg-yellow-500/20 text-yellow-400'
-                            : offer.status === 'accepted'
-                            ? 'bg-green-500/20 text-green-400'
-                            : 'bg-red-500/20 text-red-400'
-                        }`}>
-                          {offer.status === 'pending' ? 'Bekliyor' :
-                           offer.status === 'accepted' ? 'Kabul Edildi' : 'Reddedildi'}
-                        </span>
-                        {offer.status === 'pending' && (
-                          <div className="flex gap-2">
-                            <button className="rounded bg-green-600 px-3 py-1 text-xs hover:bg-green-700">
-                              Kabul Et
-                            </button>
-                            <button className="rounded bg-red-600 px-3 py-1 text-xs hover:bg-red-700">
-                              Reddet
-                            </button>
-                          </div>
-                        )}
+                      <p className="mt-0.5 text-xs text-slate-500">Talep: {o.request.title}</p>
+                      <p className="mt-2 text-sm text-slate-400">{o.description}</p>
+                      <div className="mt-3 flex gap-4 text-xs text-slate-500">
+                        <span>💰 ₺{o.price.toLocaleString('tr-TR')}</span>
+                        <span>⏱ {o.estimated_time} gün</span>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'orders' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold">Siparişlerim</h2>
-
-            {orders.length === 0 ? (
-              <div className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
-                <p className="text-slate-400">Henüz hiç siparişiniz yok.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {orders.map((order) => (
-                  <div key={order.id} className="rounded-lg border border-slate-800 bg-slate-900 p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold">{order.producer.company_name}</h3>
-                        <div className="mt-4 flex items-center gap-4 text-sm text-slate-500">
-                          <span>Toplam: ₺{order.total_price}</span>
-                          <span>Tarih: {new Date(order.created_at).toLocaleDateString('tr-TR')}</span>
-                        </div>
+                    {o.status === 'pending' && (
+                      <div className="flex shrink-0 flex-col gap-2">
+                        <button className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium hover:bg-green-500 transition-colors">
+                          Kabul Et
+                        </button>
+                        <button className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs hover:bg-red-900/50 hover:text-red-400 transition-colors">
+                          Reddet
+                        </button>
                       </div>
-                      <div className="ml-4">
-                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          order.status === 'pending'
-                            ? 'bg-yellow-500/20 text-yellow-400'
-                            : order.status === 'confirmed'
-                            ? 'bg-blue-500/20 text-blue-400'
-                            : order.status === 'in_progress'
-                            ? 'bg-orange-500/20 text-orange-400'
-                            : order.status === 'shipped'
-                            ? 'bg-purple-500/20 text-purple-400'
-                            : order.status === 'delivered'
-                            ? 'bg-green-500/20 text-green-400'
-                            : 'bg-red-500/20 text-red-400'
-                        }`}>
-                          {order.status === 'pending' ? 'Bekliyor' :
-                           order.status === 'confirmed' ? 'Onaylandı' :
-                           order.status === 'in_progress' ? 'Üretimde' :
-                           order.status === 'shipped' ? 'Kargoda' :
-                           order.status === 'delivered' ? 'Teslim Edildi' : 'İptal Edildi'}
-                        </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Orders */}
+          {tab === 'orders' && (
+            <div className="mt-6 space-y-3">
+              {orders.length === 0 ? (
+                <EmptyState
+                  icon="📦"
+                  title="Henüz siparişiniz yok"
+                  description="Bir teklifi kabul ettiğinizde sipariş buraya gelecektir."
+                />
+              ) : orders.map(o => (
+                <div key={o.id} className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-slate-100">{o.producer.company_name}</h3>
+                        <Badge status={o.status} map={STATUS_ORDER} />
+                      </div>
+                      <div className="mt-2 flex gap-4 text-xs text-slate-500">
+                        <span>💰 ₺{o.total_price.toLocaleString('tr-TR')}</span>
+                        <span>📅 {new Date(o.created_at).toLocaleDateString('tr-TR')}</span>
                       </div>
                     </div>
+                    <button className="shrink-0 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-500 transition-colors">
+                      Detay
+                    </button>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  )
+}
+
+function EmptyState({ icon, title, description, action }: {
+  icon: string
+  title: string
+  description: string
+  action?: string
+}) {
+  return (
+    <div className="rounded-xl border border-dashed border-slate-800 bg-slate-900/50 p-12 text-center">
+      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-800 text-2xl">
+        {icon}
       </div>
+      <h3 className="font-semibold text-slate-300">{title}</h3>
+      <p className="mt-1 text-sm text-slate-500">{description}</p>
+      {action && (
+        <button className="mt-4 rounded-xl bg-orange-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-orange-400 transition-colors">
+          {action}
+        </button>
+      )}
     </div>
   )
 }

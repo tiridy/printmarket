@@ -28,21 +28,59 @@ interface Offer {
   price: number
   description: string
   estimated_time: number
-  status: string
-  request: {
-    title: string
-    customer_id: string
-  }
+  status: 'pending' | 'accepted' | 'rejected'
+  request: { title: string; customer_id: string }
 }
 
 interface Order {
   id: string
   total_price: number
-  status: string
+  status: 'pending' | 'confirmed' | 'in_progress' | 'shipped' | 'delivered' | 'cancelled'
   created_at: string
-  customer: {
-    email: string
-  }
+  customer: { email: string }
+}
+
+type Tab = 'products' | 'offers' | 'orders'
+
+const STATUS_ORDER: Record<string, { label: string; cls: string }> = {
+  pending:     { label: 'Bekliyor',       cls: 'bg-yellow-500/15 text-yellow-400' },
+  confirmed:   { label: 'Onaylandı',      cls: 'bg-blue-500/15 text-blue-400' },
+  in_progress: { label: 'Üretimde',       cls: 'bg-orange-500/15 text-orange-400' },
+  shipped:     { label: 'Kargoda',        cls: 'bg-purple-500/15 text-purple-400' },
+  delivered:   { label: 'Teslim Edildi',  cls: 'bg-green-500/15 text-green-400' },
+  cancelled:   { label: 'İptal Edildi',   cls: 'bg-red-500/15 text-red-400' },
+}
+
+function Badge({ status, map }: { status: string; map: Record<string, { label: string; cls: string }> }) {
+  const s = map[status] ?? { label: status, cls: 'bg-slate-500/15 text-slate-400' }
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${s.cls}`}>
+      {s.label}
+    </span>
+  )
+}
+
+function initials(email: string) {
+  return email.slice(0, 2).toUpperCase()
+}
+
+function EmptyState({ icon, title, description, action }: {
+  icon: string; title: string; description: string; action?: string
+}) {
+  return (
+    <div className="rounded-xl border border-dashed border-slate-800 bg-slate-900/50 p-12 text-center">
+      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-800 text-2xl">
+        {icon}
+      </div>
+      <h3 className="font-semibold text-slate-300">{title}</h3>
+      <p className="mt-1 text-sm text-slate-500">{description}</p>
+      {action && (
+        <button className="mt-4 rounded-xl bg-orange-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-orange-400 transition-colors">
+          {action}
+        </button>
+      )}
+    </div>
+  )
 }
 
 export default function ProducerDashboard() {
@@ -53,76 +91,37 @@ export default function ProducerDashboard() {
   const [offers, setOffers] = useState<Offer[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('products')
+  const [tab, setTab] = useState<Tab>('products')
 
   useEffect(() => {
-    const getUser = async () => {
+    const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login'); return }
+
+      const { data: userData } = await supabase
+        .from('users').select('role').eq('id', user.id).single()
+
+      if (userData?.role !== 'producer') { router.push('/dashboard'); return }
+
       setUser(user)
 
-      if (!user) {
-        router.push('/login')
-        return
-      }
-
-      // Kullanıcı rolünü kontrol et
-      const { data: userData } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-      if (userData?.role !== 'producer') {
-        router.push('/dashboard')
-        return
-      }
-
-      // Üretici profilini yükle
       const { data: profileData } = await supabase
-        .from('producer_profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
+        .from('producer_profiles').select('*').eq('user_id', user.id).single()
 
       setProfile(profileData)
 
-      // Ürünleri yükle
-      const { data: productsData } = await supabase
-        .from('products')
-        .select('*')
-        .eq('producer_id', profileData?.id)
-        .order('created_at', { ascending: false })
+      const [{ data: prod }, { data: off }, { data: ord }] = await Promise.all([
+        supabase.from('products').select('*').eq('producer_id', profileData?.id).order('created_at', { ascending: false }),
+        supabase.from('offers').select('*, request:requests(title, customer_id)').eq('producer_id', profileData?.id).order('created_at', { ascending: false }),
+        supabase.from('orders').select('*, customer:users(email)').eq('producer_id', user.id).order('created_at', { ascending: false }),
+      ])
 
-      setProducts(productsData || [])
-
-      // Teklifleri yükle
-      const { data: offersData } = await supabase
-        .from('offers')
-        .select(`
-          *,
-          request:requests(title, customer_id)
-        `)
-        .eq('producer_id', profileData?.id)
-        .order('created_at', { ascending: false })
-
-      setOffers(offersData || [])
-
-      // Siparişleri yükle
-      const { data: ordersData } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          customer:users(email)
-        `)
-        .eq('producer_id', user.id)
-        .order('created_at', { ascending: false })
-
-      setOrders(ordersData || [])
-
+      setProducts(prod ?? [])
+      setOffers(off ?? [])
+      setOrders(ord ?? [])
       setLoading(false)
     }
-
-    getUser()
+    init()
   }, [router])
 
   const handleLogout = async () => {
@@ -133,237 +132,241 @@ export default function ProducerDashboard() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <div className="text-white">Yükleniyor...</div>
+        <div className="flex items-center gap-3 text-slate-400">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-600 border-t-orange-400" />
+          Yükleniyor...
+        </div>
       </div>
     )
   }
 
+  const pendingOffers = offers.filter(o => o.status === 'pending').length
+  const activeOrders = orders.filter(o => ['confirmed', 'in_progress'].includes(o.status)).length
+  const totalRevenue = orders
+    .filter(o => o.status === 'delivered')
+    .reduce((sum, o) => sum + o.total_price, 0)
+
+  const tabs: { key: Tab; label: string; count: number }[] = [
+    { key: 'products', label: 'Ürünlerim',  count: products.length },
+    { key: 'offers',   label: 'Tekliflerim', count: offers.length },
+    { key: 'orders',   label: 'Siparişler',  count: orders.length },
+  ]
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/95">
-        <div className="mx-auto max-w-7xl px-6 py-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-orange-400">TİRİDY - Üretici Paneli</h1>
-            <div className="flex items-center gap-4">
-              <span className="text-slate-300">{user?.email}</span>
-              <button
-                onClick={handleLogout}
-                className="rounded-lg bg-slate-800 px-4 py-2 text-sm hover:bg-slate-700"
-              >
-                Çıkış Yap
-              </button>
+      <header className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+          <span className="text-xl font-bold tracking-tight text-orange-400">TİRİDY</span>
+          <div className="flex items-center gap-3">
+            <div className="hidden text-right sm:block">
+              <p className="text-sm font-medium text-slate-200">{profile?.company_name ?? user?.email}</p>
+              <p className="text-xs text-slate-500">Üretici</p>
             </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-500/20 text-sm font-bold text-orange-400">
+              {user?.email ? initials(user.email) : '?'}
+            </div>
+            <button
+              onClick={handleLogout}
+              className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-500 hover:text-slate-200 transition-colors"
+            >
+              Çıkış
+            </button>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        {/* Profile Info */}
-        {profile && (
-          <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900 p-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">{profile.company_name}</h2>
-                <p className="mt-2 text-slate-400">{profile.description}</p>
-                <div className="mt-4 flex items-center gap-4 text-sm text-slate-500">
-                  <span>Konum: {profile.location}</span>
-                  <span>Rating: ⭐ {profile.rating.toFixed(1)}</span>
-                </div>
+      <main className="mx-auto max-w-7xl px-6 py-8 space-y-8">
+        {/* Welcome + Profile */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Üretici Paneli</h1>
+            {profile ? (
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-400">
+                <span>🏭 {profile.company_name}</span>
+                {profile.location && <span>📍 {profile.location}</span>}
+                {profile.rating > 0 && <span>⭐ {profile.rating.toFixed(1)}</span>}
               </div>
-              <button className="rounded-lg bg-slate-800 px-4 py-2 text-sm hover:bg-slate-700">
-                Profili Düzenle
-              </button>
-            </div>
+            ) : (
+              <p className="mt-1 text-sm text-yellow-400">Henüz profil oluşturulmadı.</p>
+            )}
           </div>
-        )}
-
-        {/* Quick Actions */}
-        <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900 p-6">
-          <h2 className="mb-4 text-xl font-semibold">Hızlı İşlemler</h2>
-          <div className="flex flex-wrap gap-4">
-            <button className="rounded-lg bg-orange-500 px-6 py-3 text-sm hover:bg-orange-600">
-              Ürün Ekle
+          <div className="flex gap-3">
+            <button className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-orange-400 transition-colors">
+              + Ürün Ekle
             </button>
-            <button className="rounded-lg bg-slate-800 px-6 py-3 text-sm hover:bg-slate-700">
+            <button className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500 transition-colors">
               Talepleri İncele
             </button>
-            <button className="rounded-lg bg-slate-800 px-6 py-3 text-sm hover:bg-slate-700">
-              Tekliflerim
-            </button>
           </div>
+        </div>
+
+        {/* Stats */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            { label: 'Bekleyen Teklif', value: pendingOffers,                          icon: '💬', color: 'text-yellow-400' },
+            { label: 'Aktif Sipariş',   value: activeOrders,                            icon: '🔧', color: 'text-orange-400' },
+            { label: 'Toplam Gelir',    value: `₺${totalRevenue.toLocaleString('tr-TR')}`, icon: '💰', color: 'text-green-400' },
+          ].map(s => (
+            <div key={s.label} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-slate-400">{s.label}</p>
+                <span className="text-xl">{s.icon}</span>
+              </div>
+              <p className={`mt-2 text-3xl font-bold ${s.color}`}>{s.value}</p>
+            </div>
+          ))}
         </div>
 
         {/* Tabs */}
-        <div className="mb-8 flex space-x-1 rounded-lg bg-slate-800 p-1">
-          <button
-            onClick={() => setActiveTab('products')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'products'
-                ? 'bg-orange-500 text-white'
-                : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            Ürünlerim ({products.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('offers')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'offers'
-                ? 'bg-orange-500 text-white'
-                : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            Tekliflerim ({offers.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('orders')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'orders'
-                ? 'bg-orange-500 text-white'
-                : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            Siparişler ({orders.length})
-          </button>
-        </div>
-
-        {/* Content */}
-        {activeTab === 'products' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Ürünlerim</h2>
-              <button className="rounded-lg bg-orange-500 px-4 py-2 text-sm hover:bg-orange-600">
-                Yeni Ürün Ekle
+        <div>
+          <div className="flex gap-1 rounded-xl bg-slate-900 p-1 w-fit">
+            {tabs.map(t => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  tab === t.key
+                    ? 'bg-orange-500 text-slate-950'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {t.label}
+                <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${
+                  tab === t.key ? 'bg-slate-950/30 text-slate-950' : 'bg-slate-800 text-slate-500'
+                }`}>
+                  {t.count}
+                </span>
               </button>
-            </div>
+            ))}
+          </div>
 
-            {products.length === 0 ? (
-              <div className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
-                <p className="text-slate-400">Henüz hiç ürün eklemediniz.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {products.map((product) => (
-                  <div key={product.id} className="rounded-lg border border-slate-800 bg-slate-900 p-6">
-                    <div className="flex flex-col">
-                      <h3 className="text-lg font-semibold">{product.name}</h3>
-                      <p className="mt-2 text-slate-400 text-sm">{product.description}</p>
+          {/* Products */}
+          {tab === 'products' && (
+            <div className="mt-6">
+              {products.length === 0 ? (
+                <EmptyState
+                  icon="📦"
+                  title="Henüz ürün eklemediniz"
+                  description="İlk ürününüzü ekleyin, müşteriler kataloğunuzu görsün."
+                  action="+ Ürün Ekle"
+                />
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {products.map(p => (
+                    <div key={p.id} className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="truncate font-semibold text-slate-100">{p.name}</h3>
+                          <p className="mt-1 text-xs text-slate-500">{p.category}</p>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
+                          p.stock_quantity > 0 ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'
+                        }`}>
+                          {p.stock_quantity > 0 ? `${p.stock_quantity} stok` : 'Tükendi'}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-400 line-clamp-2">{p.description}</p>
                       <div className="mt-4 flex items-center justify-between">
-                        <span className="text-lg font-bold text-orange-400">₺{product.price}</span>
-                        <span className="text-sm text-slate-500">Stok: {product.stock_quantity}</span>
-                      </div>
-                      <div className="mt-4 flex gap-2">
-                        <button className="flex-1 rounded bg-slate-800 py-2 text-xs hover:bg-slate-700">
-                          Düzenle
-                        </button>
-                        <button className="flex-1 rounded bg-red-600 py-2 text-xs hover:bg-red-700">
-                          Sil
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'offers' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold">Verdiğim Teklifler</h2>
-
-            {offers.length === 0 ? (
-              <div className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
-                <p className="text-slate-400">Henüz hiç teklif vermediniz.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {offers.map((offer) => (
-                  <div key={offer.id} className="rounded-lg border border-slate-800 bg-slate-900 p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold">{offer.request.title}</h3>
-                        <p className="mt-2 text-slate-300">{offer.description}</p>
-                        <div className="mt-4 flex items-center gap-4 text-sm text-slate-500">
-                          <span>Fiyat: ₺{offer.price}</span>
-                          <span>Teslim Süresi: {offer.estimated_time} gün</span>
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          offer.status === 'pending'
-                            ? 'bg-yellow-500/20 text-yellow-400'
-                            : offer.status === 'accepted'
-                            ? 'bg-green-500/20 text-green-400'
-                            : 'bg-red-500/20 text-red-400'
-                        }`}>
-                          {offer.status === 'pending' ? 'Bekliyor' :
-                           offer.status === 'accepted' ? 'Kabul Edildi' : 'Reddedildi'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'orders' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold">Siparişlerim</h2>
-
-            {orders.length === 0 ? (
-              <div className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
-                <p className="text-slate-400">Henüz hiç siparişiniz yok.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {orders.map((order) => (
-                  <div key={order.id} className="rounded-lg border border-slate-800 bg-slate-900 p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold">{order.customer.email}</h3>
-                        <div className="mt-4 flex items-center gap-4 text-sm text-slate-500">
-                          <span>Toplam: ₺{order.total_price}</span>
-                          <span>Tarih: {new Date(order.created_at).toLocaleDateString('tr-TR')}</span>
-                        </div>
-                      </div>
-                      <div className="ml-4 flex flex-col gap-2">
-                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          order.status === 'pending'
-                            ? 'bg-yellow-500/20 text-yellow-400'
-                            : order.status === 'confirmed'
-                            ? 'bg-blue-500/20 text-blue-400'
-                            : order.status === 'in_progress'
-                            ? 'bg-orange-500/20 text-orange-400'
-                            : order.status === 'shipped'
-                            ? 'bg-purple-500/20 text-purple-400'
-                            : order.status === 'delivered'
-                            ? 'bg-green-500/20 text-green-400'
-                            : 'bg-red-500/20 text-red-400'
-                        }`}>
-                          {order.status === 'pending' ? 'Bekliyor' :
-                           order.status === 'confirmed' ? 'Onaylandı' :
-                           order.status === 'in_progress' ? 'Üretimde' :
-                           order.status === 'shipped' ? 'Kargoda' :
-                           order.status === 'delivered' ? 'Teslim Edildi' : 'İptal Edildi'}
-                        </span>
-                        {order.status === 'pending' && (
-                          <button className="rounded bg-green-600 px-3 py-1 text-xs hover:bg-green-700">
-                            Onayla
+                        <span className="text-lg font-bold text-orange-400">₺{p.price.toLocaleString('tr-TR')}</span>
+                        <div className="flex gap-2">
+                          <button className="rounded-lg border border-slate-700 px-2.5 py-1 text-xs hover:border-slate-500 transition-colors">
+                            Düzenle
                           </button>
-                        )}
+                          <button className="rounded-lg border border-red-900/50 px-2.5 py-1 text-xs text-red-400 hover:bg-red-900/20 transition-colors">
+                            Sil
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Offers */}
+          {tab === 'offers' && (
+            <div className="mt-6 space-y-3">
+              {offers.length === 0 ? (
+                <EmptyState
+                  icon="💬"
+                  title="Henüz teklif vermediniz"
+                  description="Müşteri taleplerini inceleyip teklif gönderebilirsiniz."
+                  action="Talepleri İncele"
+                />
+              ) : offers.map(o => (
+                <div key={o.id} className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-slate-100">{o.request.title}</h3>
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                          o.status === 'pending'  ? 'bg-yellow-500/15 text-yellow-400' :
+                          o.status === 'accepted' ? 'bg-green-500/15 text-green-400' :
+                                                    'bg-red-500/15 text-red-400'
+                        }`}>
+                          {o.status === 'pending' ? 'Bekliyor' : o.status === 'accepted' ? 'Kabul Edildi' : 'Reddedildi'}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm text-slate-400">{o.description}</p>
+                      <div className="mt-3 flex gap-4 text-xs text-slate-500">
+                        <span>💰 ₺{o.price.toLocaleString('tr-TR')}</span>
+                        <span>⏱ {o.estimated_time} gün</span>
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Orders */}
+          {tab === 'orders' && (
+            <div className="mt-6 space-y-3">
+              {orders.length === 0 ? (
+                <EmptyState
+                  icon="🔧"
+                  title="Henüz sipariş yok"
+                  description="Teklifiniz kabul edildiğinde siparişler burada görünecektir."
+                />
+              ) : orders.map(o => (
+                <div key={o.id} className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-slate-100">{o.customer.email}</h3>
+                        <Badge status={o.status} map={STATUS_ORDER} />
+                      </div>
+                      <div className="mt-2 flex gap-4 text-xs text-slate-500">
+                        <span>💰 ₺{o.total_price.toLocaleString('tr-TR')}</span>
+                        <span>📅 {new Date(o.created_at).toLocaleDateString('tr-TR')}</span>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col gap-2">
+                      {o.status === 'pending' && (
+                        <button className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium hover:bg-green-500 transition-colors">
+                          Onayla
+                        </button>
+                      )}
+                      {o.status === 'confirmed' && (
+                        <button className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium hover:bg-orange-500 transition-colors">
+                          Üretime Al
+                        </button>
+                      )}
+                      {o.status === 'in_progress' && (
+                        <button className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium hover:bg-purple-500 transition-colors">
+                          Kargoya Ver
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   )
 }
