@@ -9,6 +9,8 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('next') ?? '/dashboard'
 
   if (code) {
+    const successResponse = NextResponse.redirect(new URL(next, request.url))
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -18,18 +20,10 @@ export async function GET(request: NextRequest) {
             return request.cookies.get(name)?.value
           },
           set(name: string, value: string, options: CookieOptions) {
-            request.cookies.set({
-              name,
-              value,
-              ...options,
-            })
+            successResponse.cookies.set({ name, value, ...options })
           },
           remove(name: string, options: CookieOptions) {
-            request.cookies.set({
-              name,
-              value: '',
-              ...options,
-            })
+            successResponse.cookies.set({ name, value: '', ...options })
           },
         },
       }
@@ -38,10 +32,9 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      return NextResponse.redirect(new URL(next, request.url))
+      return successResponse
     }
   }
 
-  // Return to login page with error
   return NextResponse.redirect(new URL('/login?error=auth_callback_error', request.url))
 }
