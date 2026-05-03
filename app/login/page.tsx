@@ -42,9 +42,9 @@ export default function Login() {
           <Auth
             supabaseClient={supabase}
             appearance={{ theme: ThemeSupa }}
-            providers={['google', 'apple']}
+            providers={['google']}
             redirectTo={redirectTo}
-            onlyThirdPartyProviders={false}
+            onlyThirdPartyProviders={true}
             localization={{
               variables: {
                 sign_in: {
@@ -52,7 +52,7 @@ export default function Login() {
                   password_label: 'Şifre',
                   button_label: 'Giriş Yap',
                   loading_button_label: 'Giriş yapılıyor...',
-                  social_provider_text: '{{provider}} ile giriş yap',
+                  social_provider_text: 'Google ile Giriş Yap',
                   link_text: 'Zaten hesabınız var mı? Giriş yapın',
                 },
                 sign_up: {
@@ -60,7 +60,7 @@ export default function Login() {
                   password_label: 'Şifre',
                   button_label: 'Kayıt Ol',
                   loading_button_label: 'Kayıt olunuyor...',
-                  social_provider_text: '{{provider}} ile kayıt ol',
+                  social_provider_text: 'Google ile Kayıt Ol',
                   link_text: 'Hesabınız yok mu? Kayıt olun',
                 },
               },
