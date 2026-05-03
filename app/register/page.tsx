@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { supabase } from '../utils/supabase'
 
-const CALLBACK_URL = 'https://printmarket-henna.vercel.app/auth/callback'
+// redirectTo kaldırıldı — Supabase Dashboard'daki varsayılan Site URL kullanılıyor
 
 export default function Register() {
   const [email, setEmail] = useState('')
@@ -26,17 +26,11 @@ export default function Register() {
   }
 
   async function handleGoogleLogin() {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: CALLBACK_URL },
-    })
+    await supabase.auth.signInWithOAuth({ provider: 'google' })
   }
 
   async function handleAppleLogin() {
-    await supabase.auth.signInWithOAuth({
-      provider: 'apple',
-      options: { redirectTo: CALLBACK_URL },
-    })
+    await supabase.auth.signInWithOAuth({ provider: 'apple' })
   }
 
   if (success) {

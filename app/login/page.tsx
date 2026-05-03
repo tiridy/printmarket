@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../utils/supabase'
 
-const CALLBACK_URL = 'https://printmarket-henna.vercel.app/auth/callback'
+// redirectTo kaldırıldı — Supabase Dashboard'daki varsayılan Site URL kullanılıyor
+// Daha önce gönderilen değer: 'https://printmarket-henna.vercel.app/auth/callback'
 
 export default function Login() {
   const router = useRouter()
@@ -27,16 +28,16 @@ export default function Login() {
   }
 
   async function handleGoogleLogin() {
+    console.log('[login] Google OAuth başlatılıyor — redirectTo YOK, Supabase varsayılanı kullanılıyor')
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: CALLBACK_URL },
     })
   }
 
   async function handleAppleLogin() {
+    console.log('[login] Apple OAuth başlatılıyor — redirectTo YOK, Supabase varsayılanı kullanılıyor')
     await supabase.auth.signInWithOAuth({
       provider: 'apple',
-      options: { redirectTo: CALLBACK_URL },
     })
   }
 
