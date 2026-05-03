@@ -2,14 +2,38 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create custom types
-CREATE TYPE user_role AS ENUM ('customer', 'producer');
-CREATE TYPE request_status AS ENUM ('open', 'closed', 'fulfilled');
-CREATE TYPE offer_status AS ENUM ('pending', 'accepted', 'rejected');
-CREATE TYPE order_status AS ENUM ('pending', 'confirmed', 'in_progress', 'shipped', 'delivered', 'cancelled');
-CREATE TYPE payment_status AS ENUM ('pending', 'completed', 'failed', 'refunded');
+DO $$ BEGIN
+    CREATE TYPE user_role AS ENUM ('customer', 'producer');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE request_status AS ENUM ('open', 'closed', 'fulfilled');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE offer_status AS ENUM ('pending', 'accepted', 'rejected');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE order_status AS ENUM ('pending', 'confirmed', 'in_progress', 'shipped', 'delivered', 'cancelled');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE payment_status AS ENUM ('pending', 'completed', 'failed', 'refunded');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- Create users table
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email TEXT UNIQUE NOT NULL,
     role user_role NOT NULL,
@@ -18,7 +42,7 @@ CREATE TABLE users (
 );
 
 -- Create producer_profiles table
-CREATE TABLE producer_profiles (
+CREATE TABLE IF NOT EXISTS producer_profiles (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     company_name TEXT NOT NULL,
@@ -31,7 +55,7 @@ CREATE TABLE producer_profiles (
 );
 
 -- Create products table
-CREATE TABLE products (
+CREATE TABLE IF NOT EXISTS products (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     producer_id UUID REFERENCES producer_profiles(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -46,7 +70,7 @@ CREATE TABLE products (
 );
 
 -- Create requests table
-CREATE TABLE requests (
+CREATE TABLE IF NOT EXISTS requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     customer_id UUID REFERENCES users(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
@@ -60,7 +84,7 @@ CREATE TABLE requests (
 );
 
 -- Create offers table
-CREATE TABLE offers (
+CREATE TABLE IF NOT EXISTS offers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     request_id UUID REFERENCES requests(id) ON DELETE CASCADE,
     producer_id UUID REFERENCES producer_profiles(id) ON DELETE CASCADE,
@@ -73,7 +97,7 @@ CREATE TABLE offers (
 );
 
 -- Create orders table
-CREATE TABLE orders (
+CREATE TABLE IF NOT EXISTS orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     customer_id UUID REFERENCES users(id) ON DELETE CASCADE,
     producer_id UUID REFERENCES producer_profiles(id) ON DELETE CASCADE,
@@ -88,7 +112,7 @@ CREATE TABLE orders (
 );
 
 -- Create payments table
-CREATE TABLE payments (
+CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
     amount DECIMAL(10,2) NOT NULL,
@@ -101,7 +125,7 @@ CREATE TABLE payments (
 );
 
 -- Create reviews table
-CREATE TABLE reviews (
+CREATE TABLE IF NOT EXISTS reviews (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
     reviewer_id UUID REFERENCES users(id) ON DELETE CASCADE,
