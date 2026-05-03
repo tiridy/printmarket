@@ -4,12 +4,17 @@ import { Auth } from '@supabase/auth-ui-react'
 import { ThemeSupa } from '@supabase/auth-ui-shared'
 import { supabase } from '../utils/supabase'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export default function Login() {
   const router = useRouter()
+  const [redirectTo, setRedirectTo] = useState('')
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setRedirectTo(`${window.location.origin}/dashboard`)
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
         router.push('/dashboard')
@@ -38,7 +43,7 @@ export default function Login() {
             supabaseClient={supabase}
             appearance={{ theme: ThemeSupa }}
             providers={['google', 'apple']}
-            redirectTo={`${window.location.origin}/dashboard`}
+            redirectTo={redirectTo}
             onlyThirdPartyProviders={false}
             localization={{
               variables: {
