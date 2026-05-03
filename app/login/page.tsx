@@ -1,18 +1,30 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../utils/supabase'
 
-// redirectTo kaldırıldı — Supabase Dashboard'daki varsayılan Site URL kullanılıyor
-// Daha önce gönderilen değer: 'https://printmarket-henna.vercel.app/auth/callback'
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  server_error: 'Supabase yapılandırma hatası: Redirect URL izin listesine eklenmemiş. Dashboard → Authentication → URL Configuration sayfasını kontrol edin.',
+  access_denied: 'Google girişi reddedildi.',
+  exchange_failed: 'Oturum kodu doğrulanamadı. Tekrar deneyin.',
+  no_session: 'Oturum oluşturulamadı. Tekrar deneyin.',
+}
 
 export default function Login() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const errorParam = searchParams.get('error')
+    if (errorParam) {
+      setError(OAUTH_ERROR_MESSAGES[errorParam] ?? `Giriş hatası: ${errorParam}`)
+    }
+  }, [searchParams])
 
   async function handleEmailLogin(e: { preventDefault(): void }) {
     e.preventDefault()
