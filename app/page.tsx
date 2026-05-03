@@ -130,6 +130,10 @@ export default async function Home() {
                 <h2 className="text-4xl font-semibold text-white">Teknik baskı sürecini 3 adımda yönetin</h2>
                 <p className="text-slate-400">
                   TİRİDY ile talep oluşturun, üreticilerle eşleşin ve siparişinizi güvenli ödeme altyapısıyla tamamlayın.
+                </p>
+              </div>
+
+              <div className="space-y-6">
                 {[
                   {
                     title: '1. Talebini Oluştur',
