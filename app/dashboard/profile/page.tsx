@@ -13,6 +13,7 @@ interface ProducerProfile {
   contact_info: { website?: string; phone?: string }
   business_type: 'sahis' | 'tuzel' | 'freelancer' | ''
   tckn: string; vkn: string; vergi_dairesi: string; ticaret_unvani: string
+  iban: string
   verification_status: string; verification_note: string; vergi_levhasi_url: string; kimlik_url: string
 }
 
@@ -55,7 +56,7 @@ export default function ProfilePage() {
   const [pp, setPp] = useState<ProducerProfile>({
     company_name: '', description: '', location: '',
     contact_info: { website: '', phone: '' },
-    business_type: '', tckn: '', vkn: '', vergi_dairesi: '', ticaret_unvani: '',
+    business_type: '', tckn: '', vkn: '', vergi_dairesi: '', ticaret_unvani: '', iban: '',
     verification_status: 'unverified', verification_note: '', vergi_levhasi_url: '', kimlik_url: '',
   })
 
@@ -85,6 +86,7 @@ export default function ProfilePage() {
             vkn: data.vkn ?? '',
             vergi_dairesi: data.vergi_dairesi ?? '',
             ticaret_unvani: data.ticaret_unvani ?? '',
+            iban: data.iban ?? '',
             verification_status: data.verification_status ?? 'unverified',
             verification_note: data.verification_note ?? '',
             vergi_levhasi_url: data.vergi_levhasi_url ?? '',
@@ -101,9 +103,9 @@ export default function ProfilePage() {
     if (role !== 'producer') return null
     if (!pp.business_type) return 'Lütfen işletme türünü seçin.'
     if (pp.business_type === 'freelancer') {
-      if (!pp.tckn) return 'TCKN zorunludur.'
-      if (!/^\d{11}$/.test(pp.tckn)) return 'TCKN 11 haneli rakamlardan oluşmalıdır.'
-      if (!selectedFile && !pp.kimlik_url) return 'Kimlik fotoğrafı yüklenmesi zorunludur.'
+      if (!userProfile.phone) return 'Telefon numarası zorunludur.'
+      if (!pp.iban) return 'IBAN zorunludur.'
+      if (!/^TR\d{24}$/.test(pp.iban.replace(/\s/g, '').toUpperCase())) return 'Geçerli bir Türk IBAN\'ı girin (TR ile başlayan 26 karakter).'
     }
     if (pp.business_type === 'sahis') {
       if (!pp.tckn) return 'TCKN zorunludur.'
@@ -136,35 +138,35 @@ export default function ProfilePage() {
 
     if (userErr) { setError(`Profil kaydedilemedi: ${userErr.message}`); setSaving(false); return }
 
-    // 2. Belge yükle (yeni dosya seçildiyse)
     const isFreelancer = pp.business_type === 'freelancer'
-    let levhaUrl = pp.vergi_levhasi_url
-    let kimlikUrl = pp.kimlik_url
 
-    if (selectedFile) {
+    // 2. Belge yükle — sadece şahıs/tüzel için
+    let levhaUrl = pp.vergi_levhasi_url
+    if (!isFreelancer && selectedFile) {
       const ext = selectedFile.name.split('.').pop()
-      const prefix = isFreelancer ? 'kimlik' : 'vergi-levhasi'
-      const path = `${user!.id}/${prefix}-${Date.now()}.${ext}`
+      const path = `${user!.id}/vergi-levhasi-${Date.now()}.${ext}`
       const { error: uploadErr } = await supabase.storage.from('documents').upload(path, selectedFile, { upsert: true })
       if (uploadErr) { setError(`Dosya yüklenemedi: ${uploadErr.message}`); setSaving(false); return }
       const { data: urlData } = supabase.storage.from('documents').getPublicUrl(path)
-      if (isFreelancer) kimlikUrl = urlData.publicUrl
-      else levhaUrl = urlData.publicUrl
+      levhaUrl = urlData.publicUrl
     }
 
     // 3. Üretici profili kaydet
+    const ibanClean = pp.iban.replace(/\s/g, '').toUpperCase()
     const payload = {
       user_id: user!.id,
       company_name: pp.company_name, description: pp.description, location: pp.location,
       contact_info: pp.contact_info,
       business_type: pp.business_type,
-      tckn: (pp.business_type === 'sahis' || pp.business_type === 'freelancer') ? pp.tckn : null,
+      tckn: pp.business_type === 'sahis' ? pp.tckn : null,
       vkn: pp.business_type === 'tuzel' ? pp.vkn : null,
-      vergi_dairesi: pp.business_type !== 'freelancer' ? pp.vergi_dairesi : null,
+      vergi_dairesi: !isFreelancer ? pp.vergi_dairesi : null,
       ticaret_unvani: pp.business_type === 'tuzel' ? pp.ticaret_unvani : null,
-      vergi_levhasi_url: isFreelancer ? null : levhaUrl,
-      kimlik_url: isFreelancer ? kimlikUrl : null,
-      verification_status: 'pending',
+      iban: isFreelancer ? ibanClean : null,
+      vergi_levhasi_url: !isFreelancer ? levhaUrl : null,
+      kimlik_url: null,
+      verification_status: isFreelancer ? 'approved' : 'pending',
+      verified_at: isFreelancer ? new Date().toISOString() : null,
     }
 
     const { data: savedPp, error: ppErr } = pp.id
@@ -173,11 +175,20 @@ export default function ProfilePage() {
 
     if (ppErr) { setError(`Firma profili kaydedilemedi: ${ppErr.message}`); setSaving(false); return }
 
-    setPp(prev => ({ ...prev, id: savedPp.id, vergi_levhasi_url: levhaUrl, kimlik_url: kimlikUrl, verification_status: 'pending' }))
+    // Freelancer → direkt onaylı
+    if (isFreelancer) {
+      setPp(prev => ({ ...prev, id: savedPp.id, verification_status: 'approved' }))
+      setSelectedFile(null)
+      setSaving(false)
+      setSuccess(true)
+      return
+    }
+
+    setPp(prev => ({ ...prev, id: savedPp.id, vergi_levhasi_url: levhaUrl, verification_status: 'pending' }))
     setSelectedFile(null)
     setSaving(false)
 
-    // 4. AI doğrulama başlat
+    // 4. AI doğrulama başlat (şahıs/tüzel)
     setVerifying(true)
     try {
       const res = await fetch('/api/verify-producer', {
@@ -315,13 +326,27 @@ export default function ProfilePage() {
                   ))}
                 </div>
 
-                {(pp.business_type === 'freelancer' || pp.business_type === 'sahis') && (
+                {pp.business_type === 'sahis' && (
                   <InputField label="T.C. Kimlik Numarası (TCKN)" required>
                     <input type="text" inputMode="numeric" maxLength={11} value={pp.tckn}
                       onChange={e => setPp(p => ({ ...p, tckn: e.target.value.replace(/\D/g, '') }))}
                       placeholder="11 haneli TCKN" className={inputCls} />
                     {pp.tckn && pp.tckn.length !== 11 && <p className="mt-1 text-xs text-red-400">TCKN 11 hane olmalıdır ({pp.tckn.length}/11)</p>}
                   </InputField>
+                )}
+
+                {pp.business_type === 'freelancer' && (
+                  <div className="space-y-4">
+                    <InputField label="IBAN" required>
+                      <input type="text" value={pp.iban} maxLength={32}
+                        onChange={e => setPp(p => ({ ...p, iban: e.target.value.toUpperCase() }))}
+                        placeholder="TR00 0000 0000 0000 0000 0000 00" className={inputCls} />
+                      <p className="mt-1 text-xs text-slate-500">Türkiye bankasına kayıtlı IBAN. Ödemeler bu hesaba yapılır.</p>
+                    </InputField>
+                    <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-xs text-blue-400">
+                      Freelancer olarak Türkiye operatörüne ait bir telefon numarası ve Türk bankasına kayıtlı IBAN yeterlidir. Telefon numaranızı yukarıdaki Kişisel Bilgiler bölümünden girin.
+                    </div>
+                  </div>
                 )}
 
                 {pp.business_type === 'tuzel' && (
@@ -349,15 +374,14 @@ export default function ProfilePage() {
                 )}
               </section>
 
-              {/* Belge yükleme */}
-              {pp.business_type && (
+              {/* Belge yükleme — sadece şahıs/tüzel */}
+              {(pp.business_type === 'sahis' || pp.business_type === 'tuzel') && (
                 <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-                      {pp.business_type === 'freelancer' ? 'Kimlik Fotoğrafı' : 'Vergi Levhası'}{' '}
-                      <span className="text-orange-400">*</span>
+                      Vergi Levhası <span className="text-orange-400">*</span>
                     </h2>
-                    {(pp.business_type === 'freelancer' ? pp.kimlik_url : pp.vergi_levhasi_url) && verifStatus === 'approved' && (
+                    {pp.vergi_levhasi_url && verifStatus === 'approved' && (
                       <span className="text-xs text-green-400">✓ Mevcut belge onaylı</span>
                     )}
                   </div>
@@ -373,25 +397,21 @@ export default function ProfilePage() {
                         <p className="text-sm font-medium text-orange-400">📎 {selectedFile.name}</p>
                         <p className="mt-1 text-xs text-slate-500">{(selectedFile.size / 1024).toFixed(0)} KB — değiştirmek için tıkla</p>
                       </div>
-                    ) : (pp.business_type === 'freelancer' ? pp.kimlik_url : pp.vergi_levhasi_url) ? (
+                    ) : pp.vergi_levhasi_url ? (
                       <div>
                         <p className="text-sm text-slate-400">Mevcut belge yüklü.</p>
                         <p className="mt-1 text-xs text-slate-500">Yeni belge yüklemek için tıkla (isteğe bağlı)</p>
                       </div>
                     ) : (
                       <div>
-                        <p className="text-2xl mb-2">{pp.business_type === 'freelancer' ? '🪪' : '📄'}</p>
-                        <p className="text-sm font-medium text-slate-300">
-                          {pp.business_type === 'freelancer' ? 'TC kimlik kartı veya nüfus cüzdanı yükle' : 'Vergi levhasını buraya yükle'}
-                        </p>
+                        <p className="text-2xl mb-2">📄</p>
+                        <p className="text-sm font-medium text-slate-300">Vergi levhasını buraya yükle</p>
                         <p className="mt-1 text-xs text-slate-500">PDF, JPG, PNG, WEBP — maks. 10 MB</p>
                       </div>
                     )}
                   </div>
                   <p className="text-xs text-slate-500">
-                    {pp.business_type === 'freelancer'
-                      ? 'Kimlik belgeniz AI tarafından doğrulanacak. Girdiğiniz TCKN ile kimlikte yazan numara karşılaştırılır.'
-                      : `Belge yüklendikten sonra AI tarafından doğrulanacaktır. Girdiğiniz ${pp.business_type === 'sahis' ? 'TCKN' : 'VKN'} ile belgede yazan numara karşılaştırılır.`}
+                    Belge yüklendikten sonra AI tarafından doğrulanacaktır. Girdiğiniz {pp.business_type === 'sahis' ? 'TCKN' : 'VKN'} ile belgede yazan numara karşılaştırılır.
                   </p>
                 </section>
               )}
