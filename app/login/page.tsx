@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '../utils/supabase'
 
 const OAUTH_ERROR_MESSAGES: Record<string, string> = {
@@ -12,7 +12,6 @@ const OAUTH_ERROR_MESSAGES: Record<string, string> = {
 }
 
 function LoginForm() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -36,13 +35,11 @@ function LoginForm() {
       setLoading(false)
       return
     }
-    // Rol kontrolü yapıp direkt yönlendir
     const { data: userData } = await supabase
       .from('users').select('role').eq('id', data.user.id).single()
-    router.refresh()
-    if (userData?.role === 'producer') router.push('/dashboard/producer')
-    else if (userData?.role === 'customer') router.push('/dashboard/customer')
-    else router.push('/role-selection')
+    if (userData?.role === 'producer') window.location.href = '/dashboard/producer'
+    else if (userData?.role === 'customer') window.location.href = '/dashboard/customer'
+    else window.location.href = '/role-selection'
   }
 
   async function handleGoogleLogin() {
