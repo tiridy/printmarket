@@ -30,13 +30,19 @@ function LoginForm() {
     e.preventDefault()
     setLoading(true)
     setError(null)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       setError(error.message)
-    } else {
-      router.push('/dashboard')
+      setLoading(false)
+      return
     }
-    setLoading(false)
+    // Rol kontrolü yapıp direkt yönlendir
+    const { data: userData } = await supabase
+      .from('users').select('role').eq('id', data.user.id).single()
+    router.refresh()
+    if (userData?.role === 'producer') router.push('/dashboard/producer')
+    else if (userData?.role === 'customer') router.push('/dashboard/customer')
+    else router.push('/role-selection')
   }
 
   async function handleGoogleLogin() {
