@@ -22,8 +22,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Profil bulunamadı' }, { status: 404 })
     }
 
-    if (!profile.vergi_levhasi_url) {
-      return NextResponse.json({ error: 'Vergi levhası yüklenmemiş' }, { status: 400 })
+    const isFreelancer = profile.business_type === 'freelancer'
+    const docUrl = isFreelancer ? profile.kimlik_url : profile.vergi_levhasi_url
+
+    if (!docUrl) {
+      return NextResponse.json({ error: 'Belge yüklenmemiş' }, { status: 400 })
     }
 
     await supabase
@@ -31,7 +34,9 @@ export async function POST(request: Request) {
       .update({ verification_status: 'pending' })
       .eq('id', producer_id)
 
-    const filePath = profile.vergi_levhasi_url.split('/documents/')[1]
+    // Dosyayı storage'dan indir
+    const storageKey = isFreelancer ? '/documents/' : '/documents/'
+    const filePath = docUrl.split(storageKey)[1]
     const { data: fileData, error: fileErr } = await supabase.storage
       .from('documents')
       .download(filePath)
@@ -50,14 +55,34 @@ export async function POST(request: Request) {
     const isPdf = fileName.toLowerCase().endsWith('.pdf')
     const mimeType = isPdf ? 'application/pdf' : 'image/jpeg'
 
-    const isSahis = profile.business_type === 'sahis'
-    const identityLabel = isSahis ? 'TCKN (T.C. Kimlik Numarası, 11 hane)' : 'VKN (Vergi Kimlik Numarası, 10 hane)'
-    const identityValue = isSahis ? profile.tckn : profile.vkn
-
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
-    const prompt = `Bu belge bir Türk vergi levhasıdır. Aşağıdaki bilgileri belgeden bul ve karşılaştır.
+    let prompt: string
+
+    if (isFreelancer) {
+      prompt = `Bu belge bir Türk kimlik kartı veya nüfus cüzdanıdır.
+
+Kullanıcının girdiği bilgi:
+- TCKN: ${profile.tckn}
+
+Görevin:
+1. Belgeden T.C. Kimlik Numarasını (11 haneli) bul.
+2. Kullanıcının girdiği TCKN ile belgede yazanı karşılaştır.
+
+Yanıtını SADECE aşağıdaki JSON formatında ver, başka hiçbir şey yazma:
+{
+  "number_in_doc": "belgede bulunan TCKN veya null",
+  "number_match": true/false,
+  "is_valid_tax_doc": true/false,
+  "reason": "kısa Türkçe açıklama"
+}`
+    } else {
+      const isSahis = profile.business_type === 'sahis'
+      const identityLabel = isSahis ? 'TCKN (T.C. Kimlik Numarası, 11 hane)' : 'VKN (Vergi Kimlik Numarası, 10 hane)'
+      const identityValue = isSahis ? profile.tckn : profile.vkn
+
+      prompt = `Bu belge bir Türk vergi levhasıdır. Aşağıdaki bilgileri belgeden bul ve karşılaştır.
 
 Kullanıcının girdiği bilgiler:
 - İşletme türü: ${isSahis ? 'Şahıs Şirketi' : 'Tüzel Kişi'}
@@ -77,6 +102,7 @@ Yanıtını SADECE aşağıdaki JSON formatında ver, başka hiçbir şey yazma:
   "is_valid_tax_doc": true/false,
   "reason": "kısa Türkçe açıklama"
 }`
+    }
 
     const result = await model.generateContent([
       { inlineData: { mimeType, data: base64 } },
