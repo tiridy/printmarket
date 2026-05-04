@@ -11,6 +11,8 @@ interface ProducerProfile {
   description: string
   location: string
   rating: number
+  verification_status: 'unverified' | 'pending' | 'approved' | 'rejected'
+  verification_note: string | null
 }
 
 interface Product {
@@ -136,6 +138,99 @@ export default function ProducerDashboard() {
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-600 border-t-orange-400" />
           Yükleniyor...
         </div>
+      </div>
+    )
+  }
+
+  // Lock screen — profile not yet approved
+  const verificationStatus = profile?.verification_status ?? 'unverified'
+  if (verificationStatus !== 'approved') {
+    const isUnverified = verificationStatus === 'unverified'
+    const isPending    = verificationStatus === 'pending'
+    const isRejected   = verificationStatus === 'rejected'
+
+    return (
+      <div className="min-h-screen bg-slate-950 text-white">
+        {/* Minimal header */}
+        <header className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+            <span className="text-xl font-bold tracking-tight text-orange-400">TİRİDY</span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push('/dashboard/profile')}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-500/20 text-sm font-bold text-orange-400 hover:bg-orange-500/30 transition-colors"
+                title="Profil Ayarları"
+              >
+                {user?.email ? initials(user.email) : '?'}
+              </button>
+              <button
+                onClick={handleLogout}
+                className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-500 hover:text-slate-200 transition-colors"
+              >
+                Çıkış
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <main className="mx-auto flex max-w-lg flex-col items-center px-6 py-24 text-center">
+          {/* Icon */}
+          <div className={`mb-6 flex h-20 w-20 items-center justify-center rounded-3xl text-4xl ${
+            isPending  ? 'bg-yellow-500/15' :
+            isRejected ? 'bg-red-500/15' :
+                         'bg-slate-800'
+          }`}>
+            {isPending ? '🔍' : isRejected ? '❌' : '🔒'}
+          </div>
+
+          <h1 className="text-2xl font-bold text-slate-100">
+            {isPending  ? 'Belgeniz İnceleniyor' :
+             isRejected ? 'Doğrulama Başarısız' :
+                          'Profil Doğrulaması Gerekli'}
+          </h1>
+
+          <p className="mt-3 text-sm leading-relaxed text-slate-400">
+            {isPending
+              ? 'Yüklediğiniz vergi levhası yapay zeka tarafından inceleniyor. Bu işlem birkaç dakika sürebilir. Tamamlandığında paneline erişim açılacak.'
+              : isRejected
+              ? 'Vergi levhası doğrulaması tamamlanamadı. Lütfen belgenizi kontrol edip yeniden yükleyin.'
+              : 'Üretici paneline erişebilmek için vergi levhası yüklemeniz ve doğrulanması gerekmektedir.'}
+          </p>
+
+          {/* Rejection note */}
+          {isRejected && profile?.verification_note && (
+            <div className="mt-4 w-full rounded-xl border border-red-900/50 bg-red-950/30 p-4 text-left">
+              <p className="text-xs font-semibold uppercase tracking-wide text-red-400 mb-1">Red Sebebi</p>
+              <p className="text-sm text-red-300">{profile.verification_note}</p>
+            </div>
+          )}
+
+          {/* Pending spinner */}
+          {isPending && (
+            <div className="mt-6 flex items-center gap-2 text-yellow-400 text-sm">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-yellow-800 border-t-yellow-400" />
+              İnceleme devam ediyor...
+            </div>
+          )}
+
+          {/* CTA */}
+          <button
+            onClick={() => router.push('/dashboard/profile')}
+            className={`mt-8 rounded-xl px-8 py-3 font-semibold transition-colors ${
+              isRejected
+                ? 'bg-red-600 text-white hover:bg-red-500'
+                : 'bg-orange-500 text-slate-950 hover:bg-orange-400'
+            }`}
+          >
+            {isRejected ? 'Belgeyi Yeniden Yükle' : isUnverified ? 'Profili Tamamla' : 'Profile Git'}
+          </button>
+
+          {isPending && (
+            <p className="mt-4 text-xs text-slate-600">
+              Sayfayı yenileyerek durumu kontrol edebilirsiniz.
+            </p>
+          )}
+        </main>
       </div>
     )
   }
