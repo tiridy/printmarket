@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
@@ -7,13 +7,11 @@ export async function POST(request: Request) {
     const { producer_id } = await request.json()
     if (!producer_id) return NextResponse.json({ error: 'producer_id gerekli' }, { status: 400 })
 
-    // Service role client — RLS bypass ile storage'a erişim
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Profili çek
     const { data: profile, error: profileErr } = await supabase
       .from('producer_profiles')
       .select('*')
@@ -28,13 +26,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Vergi levhası yüklenmemiş' }, { status: 400 })
     }
 
-    // Status → pending (inceleme başladı)
     await supabase
       .from('producer_profiles')
       .update({ verification_status: 'pending' })
       .eq('id', producer_id)
 
-    // Storage'dan dosyayı indir
     const filePath = profile.vergi_levhasi_url.split('/documents/')[1]
     const { data: fileData, error: fileErr } = await supabase.storage
       .from('documents')
@@ -48,33 +44,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Dosya indirilemedi' }, { status: 500 })
     }
 
-    // Base64'e çevir
     const buffer = await fileData.arrayBuffer()
     const base64 = Buffer.from(buffer).toString('base64')
     const fileName = filePath.split('/').pop() ?? ''
     const isPdf = fileName.toLowerCase().endsWith('.pdf')
-    const mediaType = isPdf ? 'application/pdf' : 'image/jpeg'
+    const mimeType = isPdf ? 'application/pdf' : 'image/jpeg'
 
     const isSahis = profile.business_type === 'sahis'
     const identityLabel = isSahis ? 'TCKN (T.C. Kimlik Numarası, 11 hane)' : 'VKN (Vergi Kimlik Numarası, 10 hane)'
     const identityValue = isSahis ? profile.tckn : profile.vkn
 
-    // Claude ile analiz
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 512,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            isPdf
-              ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
-              : { type: 'image', source: { type: 'base64', media_type: mediaType as 'image/jpeg', data: base64 } },
-            {
-              type: 'text',
-              text: `Bu belge bir Türk vergi levhasıdır. Aşağıdaki bilgileri belgeden bul ve karşılaştır.
+    const prompt = `Bu belge bir Türk vergi levhasıdır. Aşağıdaki bilgileri belgeden bul ve karşılaştır.
 
 Kullanıcının girdiği bilgiler:
 - İşletme türü: ${isSahis ? 'Şahıs Şirketi' : 'Tüzel Kişi'}
@@ -93,16 +76,15 @@ Yanıtını SADECE aşağıdaki JSON formatında ver, başka hiçbir şey yazma:
   "number_match": true/false,
   "is_valid_tax_doc": true/false,
   "reason": "kısa Türkçe açıklama"
-}`,
-            },
-          ],
-        },
-      ],
-    })
+}`
 
-    // Yanıtı parse et
-    const raw = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
-    console.log('[verify-producer] Claude yanıtı:', raw)
+    const result = await model.generateContent([
+      { inlineData: { mimeType, data: base64 } },
+      prompt,
+    ])
+
+    const raw = result.response.text().trim()
+    console.log('[verify-producer] Gemini yanıtı:', raw)
 
     let parsed: {
       number_match: boolean
