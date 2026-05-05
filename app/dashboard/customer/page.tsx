@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '../../utils/supabase'
 import { User } from '@supabase/supabase-js'
 
@@ -193,6 +194,7 @@ export default function CustomerDashboard() {
             title: 'Baskı Talebi Oluştur',
             desc: 'İhtiyacınızı belirtin, üreticilerden teklif alın.',
             action: 'Talep Oluştur',
+            href: '/order/new',
             bg: 'bg-orange-50',
             border: 'border-orange-100',
             btnCls: 'bg-orange-500 text-white hover:bg-orange-600 shadow-sm shadow-orange-200',
@@ -202,6 +204,7 @@ export default function CustomerDashboard() {
             title: 'Üretici Bul',
             desc: 'Doğrulanmış üreticiler arasından en uygununu seçin.',
             action: 'Üreticileri Gör',
+            href: '/explore',
             bg: 'bg-blue-50',
             border: 'border-blue-100',
             btnCls: 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm shadow-blue-200',
@@ -211,6 +214,7 @@ export default function CustomerDashboard() {
             title: 'Siparişlerimi Takip Et',
             desc: 'Mevcut siparişlerinizin durumunu anlık görün.',
             action: 'Siparişlere Git',
+            href: '/dashboard/customer',
             bg: 'bg-green-50',
             border: 'border-green-100',
             btnCls: 'bg-green-500 text-white hover:bg-green-600 shadow-sm shadow-green-200',
@@ -220,9 +224,9 @@ export default function CustomerDashboard() {
             <span className="text-3xl mb-3">{card.icon}</span>
             <h3 className="font-semibold text-gray-900 mb-1">{card.title}</h3>
             <p className="text-sm text-gray-500 mb-5 flex-1">{card.desc}</p>
-            <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${card.btnCls}`}>
+            <Link href={card.href} className={`rounded-xl px-4 py-2 text-sm font-semibold text-center transition-colors ${card.btnCls}`}>
               {card.action}
-            </button>
+            </Link>
           </div>
         ))}
       </div>

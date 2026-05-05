@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '../../utils/supabase'
 import { User } from '@supabase/supabase-js'
 
@@ -184,12 +185,12 @@ export default function ProducerDashboard() {
           <p className="text-sm text-gray-500">TİRİDY Üretici Panelinize hoş geldiniz.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <button className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 transition-colors shadow-sm shadow-orange-200">
+          <Link href="/order/new" className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 transition-colors shadow-sm shadow-orange-200">
             + Ürün Ekle
-          </button>
-          <button className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors">
+          </Link>
+          <Link href="/explore" className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors">
             Talepleri İncele
-          </button>
+          </Link>
         </div>
       </div>
 

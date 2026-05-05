@@ -15,14 +15,14 @@ const NAV: Record<string, { href: string; label: string; icon: string }[]> = {
     { href: '/dashboard/producer',  label: 'Siparişlerim',    icon: '🛒' },
     { href: '/dashboard/producer',  label: 'Tekliflerim',     icon: '💬' },
     { href: '/dashboard/producer',  label: 'Ürünlerim',       icon: '📦' },
-    { href: '/dashboard/producer',  label: 'Bakiyem',         icon: '💰' },
+    { href: '/explore',             label: 'Pazaryeri',       icon: '🔍' },
   ],
   customer: [
     { href: '/dashboard/customer',  label: 'Ana Sayfa',       icon: '🏠' },
     { href: '/dashboard/customer',  label: 'Siparişlerim',    icon: '📦' },
     { href: '/dashboard/customer',  label: 'Taleplerim',      icon: '📋' },
     { href: '/dashboard/customer',  label: 'Teklifler',       icon: '💬' },
-    { href: '/dashboard/customer',  label: 'Bakiyem',         icon: '💰' },
+    { href: '/explore',             label: 'Üreticiler',      icon: '🏭' },
   ],
 }
 
