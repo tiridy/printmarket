@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { supabase } from '../utils/supabase'
 import { User } from '@supabase/supabase-js'
 
-interface UserData { role: string; full_name: string }
+interface UserData { role: string; full_name: string; avatar_url?: string | null }
 
 const NAV: Record<string, { href: string; label: string; icon: ReactNode }[]> = {
   producer: [
@@ -34,16 +34,54 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [loading,  setLoading]  = useState(true)
 
   useEffect(() => {
-    const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-      setUser(user)
-      const { data } = await supabase.from('users').select('role, full_name').eq('id', user.id).single()
-      setUserData({ role: data?.role ?? '', full_name: data?.full_name ?? '' })
+    // İlk yüklemede mevcut session'ı kontrol et (ağ isteği YOK — localStorage'dan okur)
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) {
+        router.push('/login')
+        return
+      }
+      setUser(session.user)
+      await loadUserData(session.user.id, session.user)
       setLoading(false)
-    }
-    init()
+    })
+
+    // Oturum değişikliklerini dinle (sekme değişimi, token yenileme vb.)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        router.push('/login')
+        return
+      }
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setUser(session.user)
+        await loadUserData(session.user.id, session.user)
+        setLoading(false)
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [router])
+
+  const loadUserData = async (userId: string, authUser: User) => {
+    const { data } = await supabase
+      .from('users')
+      .select('role, full_name, avatar_url')
+      .eq('id', userId)
+      .single()
+
+    // Google/OAuth ile giriş yapıldıysa avatar_url'yi otomatik kaydet
+    const googleAvatar = authUser.user_metadata?.avatar_url ?? authUser.user_metadata?.picture ?? null
+    const avatarUrl = data?.avatar_url ?? googleAvatar ?? null
+
+    if (googleAvatar && !data?.avatar_url) {
+      await supabase.from('users').update({ avatar_url: googleAvatar }).eq('id', userId)
+    }
+
+    setUserData({
+      role:       data?.role ?? '',
+      full_name:  data?.full_name ?? '',
+      avatar_url: avatarUrl,
+    })
+  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -56,10 +94,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     </div>
   )
 
-  const role      = userData?.role ?? ''
-  const navItems  = NAV[role] ?? NAV.customer
+  const role       = userData?.role ?? ''
+  const navItems   = NAV[role] ?? NAV.customer
   const isProducer = role === 'producer'
-  const initials  = userData?.full_name
+  const avatarUrl  = userData?.avatar_url ?? null
+  const initials   = userData?.full_name
     ? userData.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
     : (user?.email?.[0] ?? '?').toUpperCase()
   const displayName = userData?.full_name || user?.email || ''
@@ -94,7 +133,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <button onClick={() => router.push('/dashboard/profile')}
               className="flex items-center gap-2 ml-1 pl-3 pr-2 py-1.5 rounded-xl transition hover:bg-gray-100"
               style={{ borderLeft: '1px solid var(--color-neutral-200)' }}>
-              <div className="avatar avatar-sm" style={{ background: 'var(--color-brand-500)' }}>{initials}</div>
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarUrl} alt={initials} referrerPolicy="no-referrer"
+                  className="h-7 w-7 rounded-full object-cover shrink-0" />
+              ) : (
+                <div className="avatar avatar-sm" style={{ background: 'var(--color-brand-500)' }}>{initials}</div>
+              )}
               <span className="text-sm font-medium hidden sm:block max-w-[140px] truncate" style={{ color: 'var(--color-neutral-700)' }}>
                 {displayName}
               </span>

@@ -270,9 +270,19 @@ export function StatusBadge({ status, dot = false }: { status: string; dot?: boo
 }
 
 /* ─── Avatar ─────────────────────────────────────────────────── */
-export function Avatar({ initials, size = 'md', className = '' }: {
-  initials: string; size?: 'sm' | 'md' | 'lg' | 'xl'; className?: string
+export function Avatar({ initials, src, size = 'md', className = '' }: {
+  initials: string; src?: string | null; size?: 'sm' | 'md' | 'lg' | 'xl'; className?: string
 }) {
+  if (src) {
+    const sizeMap = { sm: '32px', md: '40px', lg: '56px', xl: '72px' }
+    const dim = sizeMap[size]
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={src} alt={initials} referrerPolicy="no-referrer"
+        className={`avatar avatar-${size} object-cover ${className}`}
+        style={{ width: dim, height: dim }} />
+    )
+  }
   return (
     <div className={`avatar avatar-${size} ${className}`}>
       {initials}

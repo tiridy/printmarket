@@ -6,7 +6,7 @@ import { supabase } from '../../utils/supabase'
 import { User } from '@supabase/supabase-js'
 import { Avatar, Field, SectionCard } from '../../components/ui'
 
-interface UserProfile { full_name: string; phone: string; role: string }
+interface UserProfile { full_name: string; phone: string; role: string; avatar_url?: string | null }
 
 interface ProducerProfile {
   id?: string
@@ -29,17 +29,20 @@ const VERIF_UI: Record<VerifStatus, { label: string; icon: string; bg: string; b
 
 export default function ProfilePage() {
   const router  = useRouter()
-  const fileRef = useRef<HTMLInputElement>(null)
-  const [user,         setUser]         = useState<User | null>(null)
-  const [role,         setRole]         = useState('')
-  const [loading,      setLoading]      = useState(true)
-  const [saving,       setSaving]       = useState(false)
-  const [verifying,    setVerifying]    = useState(false)
-  const [success,      setSuccess]      = useState(false)
-  const [error,        setError]        = useState<string | null>(null)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const fileRef       = useRef<HTMLInputElement>(null)
+  const avatarFileRef = useRef<HTMLInputElement>(null)
+  const [user,            setUser]            = useState<User | null>(null)
+  const [role,            setRole]            = useState('')
+  const [loading,         setLoading]         = useState(true)
+  const [saving,          setSaving]          = useState(false)
+  const [verifying,       setVerifying]       = useState(false)
+  const [success,         setSuccess]         = useState(false)
+  const [error,           setError]           = useState<string | null>(null)
+  const [selectedFile,    setSelectedFile]    = useState<File | null>(null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const [avatarPreview,   setAvatarPreview]   = useState<string | null>(null)
 
-  const [userProfile, setUserProfile] = useState<UserProfile>({ full_name: '', phone: '', role: '' })
+  const [userProfile, setUserProfile] = useState<UserProfile>({ full_name: '', phone: '', role: '', avatar_url: null })
   const [pp, setPp] = useState<ProducerProfile>({
     company_name: '', description: '', location: '',
     contact_info: { website: '', phone: '' },
@@ -53,10 +56,13 @@ export default function ProfilePage() {
       if (!user) { router.push('/login'); return }
       setUser(user)
 
-      const { data: profile } = await supabase.from('users').select('full_name, phone, role').eq('id', user.id).single()
+      const { data: profile } = await supabase.from('users').select('full_name, phone, role, avatar_url').eq('id', user.id).single()
       if (profile) {
         setRole(profile.role ?? '')
-        setUserProfile({ full_name: profile.full_name ?? '', phone: profile.phone ?? '', role: profile.role ?? '' })
+        const googleAvatar = user.user_metadata?.avatar_url ?? user.user_metadata?.picture ?? null
+        const avatarUrl = profile.avatar_url ?? googleAvatar ?? null
+        setUserProfile({ full_name: profile.full_name ?? '', phone: profile.phone ?? '', role: profile.role ?? '', avatar_url: avatarUrl })
+        setAvatarPreview(avatarUrl)
       }
 
       if (profile?.role === 'producer') {
@@ -111,6 +117,26 @@ export default function ProfilePage() {
       if (!selectedFile && !pp.vergi_levhasi_url) return 'Vergi levhası belgesi zorunludur.'
     }
     return null
+  }
+
+  const handleAvatarChange = async (file: File) => {
+    if (!user) return
+    setAvatarUploading(true)
+    // Anlık önizleme
+    const localUrl = URL.createObjectURL(file)
+    setAvatarPreview(localUrl)
+
+    const ext  = file.name.split('.').pop()
+    const path = `avatars/${user.id}.${ext}`
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (upErr) { setError(`Fotoğraf yüklenemedi: ${upErr.message}`); setAvatarUploading(false); return }
+
+    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+    const publicUrl = urlData.publicUrl + `?t=${Date.now()}` // cache bust
+    await supabase.from('users').update({ avatar_url: publicUrl }).eq('id', user.id)
+    setUserProfile(p => ({ ...p, avatar_url: publicUrl }))
+    setAvatarPreview(publicUrl)
+    setAvatarUploading(false)
   }
 
   const handleSave = async (e: { preventDefault(): void }) => {
@@ -203,10 +229,22 @@ export default function ProfilePage() {
 
       {/* Page title */}
       <div className="flex items-center gap-4">
-        <Avatar initials={initials} size="md" />
+        {/* Tıklanabilir avatar */}
+        <div className="relative shrink-0 group cursor-pointer" onClick={() => avatarFileRef.current?.click()}>
+          <Avatar initials={initials} src={avatarPreview} size="lg" />
+          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+            {avatarUploading
+              ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              : <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+            }
+          </div>
+          <input ref={avatarFileRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarChange(f) }} />
+        </div>
         <div>
           <h1 className="text-xl font-bold" style={{ color: 'var(--color-neutral-900)' }}>Profil Ayarları</h1>
           <p className="text-sm" style={{ color: 'var(--color-neutral-400)' }}>{user?.email}</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--color-neutral-400)' }}>Fotoğrafı değiştirmek için tıkla</p>
         </div>
       </div>
 
