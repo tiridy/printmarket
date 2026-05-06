@@ -94,7 +94,7 @@ function ScoreBar({ label, value, color }: { label: string; value: number; color
         <span className="text-sm text-gray-600">{label}</span>
         <span className="text-sm font-bold text-gray-900">{value}</span>
       </div>
-      <div className="h-2 w-full rounded-full bg-gray-100">
+      <div className="h-2 w-full rounded-full" style={{ background: 'var(--color-neutral-100)' }}>
         <div className={`h-2 rounded-full ${color} transition-all duration-700`} style={{ width: `${value}%` }} />
       </div>
     </div>
@@ -153,7 +153,7 @@ export default function ProducerProfilePage() {
   }, [producerId])
 
   if (loading) return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+    <div className="flex min-h-screen items-center justify-center" style={{ background: 'var(--color-neutral-50)' }}>
       <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-orange-500" />
     </div>
   )
@@ -165,18 +165,18 @@ export default function ProducerProfilePage() {
     : (p.score ?? 0) >= 90 ? 'text-blue-500 border-blue-400' : 'text-green-500 border-green-400'
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="sticky top-0 z-20 border-b border-gray-200 bg-white shadow-sm">
+    <div className="min-h-screen" style={{ background: 'var(--color-neutral-50)' }}>
+      <header className="sticky top-0 z-20 glass-light" style={{ borderBottom: '1px solid var(--color-neutral-200)' }}>
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
-          <Link href="/" className="text-xl font-black text-orange-500">TİRİDY</Link>
-          <Link href="/explore" className="text-sm text-gray-400 hover:text-gray-600">← Üreticilere Dön</Link>
+          <Link href="/" className="text-xl font-black" style={{ color: 'var(--color-brand-500)' }}>TİRİDY</Link>
+          <Link href="/explore" className="text-sm transition hover:opacity-70" style={{ color: 'var(--color-neutral-400)' }}>← Üreticilere Dön</Link>
         </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-10 space-y-6">
 
         {/* Profile hero */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+        <div className="card p-8">
           <div className="flex flex-wrap items-start gap-6">
             <div className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl ${p.avatarColor} text-2xl font-black text-white shadow-md`}>
               {p.initials}
@@ -232,28 +232,20 @@ export default function ProducerProfilePage() {
           </div>
 
           {/* CTA buttons */}
-          <div className="mt-6 flex flex-wrap gap-3 pt-6 border-t border-gray-100">
-            <Link href="/order/new" className="rounded-xl bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white shadow-sm shadow-orange-200 transition hover:bg-orange-400">
-              Sipariş Ver
-            </Link>
+          <div className="mt-6 flex flex-wrap gap-3 pt-6" style={{ borderTop: '1px solid var(--color-neutral-100)' }}>
+            <Link href="/order/new" className="btn btn-primary">Sipariş Ver</Link>
             {p.contact_info?.website && (
-              <a href={p.contact_info.website} target="_blank" rel="noopener noreferrer"
-                className="rounded-xl border border-gray-200 px-6 py-2.5 text-sm font-medium text-gray-600 transition hover:border-gray-300 hover:bg-gray-50">
-                Web Sitesi ↗
-              </a>
+              <a href={p.contact_info.website} target="_blank" rel="noopener noreferrer" className="btn btn-secondary">Web Sitesi ↗</a>
             )}
             {p.contact_info?.phone && (
-              <a href={`tel:${p.contact_info.phone}`}
-                className="rounded-xl border border-gray-200 px-6 py-2.5 text-sm font-medium text-gray-600 transition hover:border-gray-300 hover:bg-gray-50">
-                {p.contact_info.phone}
-              </a>
+              <a href={`tel:${p.contact_info.phone}`} className="btn btn-secondary">{p.contact_info.phone}</a>
             )}
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          <div className="flex border-b border-gray-200">
+        <div className="card overflow-hidden">
+          <div className="tab-bar">
             {([
               { key: 'portfolio', label: 'Portföy' },
               { key: 'reviews',   label: `Yorumlar (${(reviews.length || (p.demoReviews?.length ?? 0))})` },
@@ -262,11 +254,7 @@ export default function ProducerProfilePage() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`px-6 py-3.5 text-sm font-medium border-b-2 transition ${
-                  activeTab === tab.key
-                    ? 'border-orange-500 text-orange-600 bg-orange-50/30'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                }`}
+                className={`tab-item ${activeTab === tab.key ? 'tab-item-active' : ''}`}
               >
                 {tab.label}
               </button>
@@ -312,7 +300,7 @@ export default function ProducerProfilePage() {
                   text: r.comment,
                   date: new Date(r.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }),
                 })) : (p.demoReviews ?? [])).map((rev, i) => (
-                  <div key={i} className="rounded-2xl border border-gray-100 bg-gray-50 p-5">
+                  <div key={i} className="rounded-2xl border p-5" style={{ borderColor: 'var(--color-neutral-100)', background: 'var(--color-neutral-50)' }}>
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-500 text-xs font-bold text-white">
@@ -349,8 +337,8 @@ export default function ProducerProfilePage() {
                   <ScoreBar key={i} label={item.label} value={item.value} color={item.color} />
                 ))}
 
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mt-4">
-                  <p className="text-xs text-gray-500 leading-relaxed">
+                <div className="rounded-xl border p-4 mt-4" style={{ borderColor: 'var(--color-neutral-200)', background: 'var(--color-neutral-50)' }}>
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--color-neutral-500)' }}>
                     Skor; teslimat hızı (%30), kalite puanı (%40), iletişim (%15) ve iade oranı (%15) ağırlıklarına göre hesaplanır.
                     Her hafta güncellenir.
                   </p>

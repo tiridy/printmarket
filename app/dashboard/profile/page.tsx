@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../utils/supabase'
 import { User } from '@supabase/supabase-js'
+import { Avatar, Field, SectionCard } from '../../components/ui'
 
 interface UserProfile { full_name: string; phone: string; role: string }
 
@@ -19,39 +20,11 @@ interface ProducerProfile {
 
 type VerifStatus = 'unverified' | 'pending' | 'approved' | 'rejected'
 
-const VERIF_UI: Record<VerifStatus, { label: string; icon: string; cls: string }> = {
-  unverified: { label: 'Doğrulama bekleniyor', icon: '⏳', cls: 'bg-gray-50 text-gray-600 border-gray-200' },
-  pending:    { label: 'İnceleniyor...',        icon: '🔍', cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
-  approved:   { label: 'Hesap doğrulandı',      icon: '✅', cls: 'bg-green-50 text-green-700 border-green-200' },
-  rejected:   { label: 'Doğrulama başarısız',   icon: '❌', cls: 'bg-red-50 text-red-700 border-red-200' },
-}
-
-const inputCls = "w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition"
-const disabledCls = "w-full rounded-xl border border-gray-100 bg-gray-50 px-4 py-2.5 text-gray-400 text-sm cursor-not-allowed"
-
-function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <label className="flex items-center gap-1 text-sm font-medium text-gray-700">
-        {label}
-        {required && <span className="text-orange-500 text-xs">*</span>}
-      </label>
-      {children}
-      {hint && <p className="text-xs text-gray-400">{hint}</p>}
-    </div>
-  )
-}
-
-function SectionCard({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <div className="flex items-center gap-2.5 px-6 py-4 border-b border-gray-100 bg-gray-50/60">
-        <span>{icon}</span>
-        <h2 className="text-sm font-semibold text-gray-700 tracking-wide">{title}</h2>
-      </div>
-      <div className="p-6 space-y-4">{children}</div>
-    </section>
-  )
+const VERIF_UI: Record<VerifStatus, { label: string; icon: string; bg: string; border: string; color: string }> = {
+  unverified: { label: 'Doğrulama bekleniyor', icon: '⏳', bg: 'var(--color-neutral-50)',      border: 'var(--color-neutral-200)', color: 'var(--color-neutral-600)' },
+  pending:    { label: 'İnceleniyor...',        icon: '🔍', bg: 'var(--color-warning-light)',   border: 'var(--color-warning)',     color: 'var(--color-warning)' },
+  approved:   { label: 'Hesap doğrulandı',      icon: '✅', bg: 'var(--color-success-light)',   border: 'var(--color-success)',     color: 'var(--color-success)' },
+  rejected:   { label: 'Doğrulama başarısız',   icon: '❌', bg: 'var(--color-danger-light)',    border: 'var(--color-danger)',      color: 'var(--color-danger)' },
 }
 
 export default function ProfilePage() {
@@ -230,12 +203,10 @@ export default function ProfilePage() {
 
       {/* Page title */}
       <div className="flex items-center gap-4">
-        <div className="h-12 w-12 shrink-0 rounded-2xl bg-orange-500 flex items-center justify-center text-lg font-bold text-white shadow-sm shadow-orange-200">
-          {initials}
-        </div>
+        <Avatar initials={initials} size="md" />
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Profil Ayarları</h1>
-          <p className="text-sm text-gray-400">{user?.email}</p>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--color-neutral-900)' }}>Profil Ayarları</h1>
+          <p className="text-sm" style={{ color: 'var(--color-neutral-400)' }}>{user?.email}</p>
         </div>
       </div>
 
@@ -245,10 +216,10 @@ export default function ProfilePage() {
         <SectionCard title="Hesap Bilgileri" icon="🔐">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="E-posta">
-              <input type="text" value={user?.email ?? ''} disabled className={disabledCls} />
+              <input type="text" value={user?.email ?? ''} disabled className="input" style={{ opacity: 0.5, cursor: 'not-allowed' }} />
             </Field>
             <Field label="Rol">
-              <input type="text" value={role === 'customer' ? 'Müşteri' : 'Üretici'} disabled className={disabledCls} />
+              <input type="text" value={role === 'customer' ? 'Müşteri' : 'Üretici'} disabled className="input" style={{ opacity: 0.5, cursor: 'not-allowed' }} />
             </Field>
           </div>
         </SectionCard>
@@ -258,11 +229,11 @@ export default function ProfilePage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Ad Soyad" required>
               <input type="text" value={userProfile.full_name} placeholder="Adınız ve soyadınız"
-                onChange={e => setUserProfile(p => ({ ...p, full_name: e.target.value }))} className={inputCls} />
+                onChange={e => setUserProfile(p => ({ ...p, full_name: e.target.value }))} className="input" />
             </Field>
             <Field label="Telefon" required hint="Türkiye operatörüne ait numara zorunludur.">
               <input type="tel" value={userProfile.phone} placeholder="+90 5xx xxx xx xx"
-                onChange={e => setUserProfile(p => ({ ...p, phone: e.target.value }))} className={inputCls} />
+                onChange={e => setUserProfile(p => ({ ...p, phone: e.target.value }))} className="input" />
             </Field>
           </div>
         </SectionCard>
@@ -270,9 +241,10 @@ export default function ProfilePage() {
         {/* Üretici bölümü */}
         {role === 'producer' && (
           <>
-            {/* Doğrulama durumu — freelancer için gösterme */}
+            {/* Doğrulama durumu */}
             {!isFreelancer && pp.business_type && (
-              <div className={`rounded-2xl border px-5 py-4 flex items-start gap-3 ${verifUI.cls}`}>
+              <div className="rounded-2xl border px-5 py-4 flex items-start gap-3"
+                style={{ background: verifUI.bg, borderColor: verifUI.border, color: verifUI.color }}>
                 <span className="text-xl shrink-0 mt-0.5">{verifUI.icon}</span>
                 <div>
                   <p className="font-semibold text-sm">{verifUI.label}</p>
@@ -297,19 +269,20 @@ export default function ProfilePage() {
                   return (
                     <button key={opt.value} type="button"
                       onClick={() => setPp(p => ({ ...p, business_type: opt.value as 'freelancer' | 'sahis' | 'tuzel' }))}
-                      className={`relative rounded-xl border p-4 text-left transition-all ${
-                        active ? 'border-orange-400 bg-orange-50 ring-1 ring-orange-300/50' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
-                      }`}>
+                      className="relative rounded-xl border p-4 text-left transition-all"
+                      style={active
+                        ? { borderColor: 'var(--color-brand-400)', background: 'var(--color-brand-50)', boxShadow: '0 0 0 1px var(--color-brand-300)' }
+                        : { borderColor: 'var(--color-neutral-200)', background: 'var(--color-neutral-0)' }}>
                       {active && (
-                        <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500">
+                        <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full" style={{ background: 'var(--color-brand-500)' }}>
                           <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                         </span>
                       )}
                       <span className="text-2xl mb-2 block">{opt.icon}</span>
-                      <p className="font-semibold text-sm text-gray-900">{opt.label}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
+                      <p className="font-semibold text-sm" style={{ color: 'var(--color-neutral-900)' }}>{opt.label}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-neutral-500)' }}>{opt.desc}</p>
                       {opt.badge && (
-                        <span className="inline-block mt-2 rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-semibold">
+                        <span className="badge mt-2" style={{ background: 'var(--color-success-light)', color: 'var(--color-success)' }}>
                           {opt.badge}
                         </span>
                       )}
@@ -318,7 +291,6 @@ export default function ProfilePage() {
                 })}
               </div>
 
-              {/* Freelancer → IBAN */}
               {pp.business_type === 'freelancer' && (
                 <div className="space-y-3 pt-1">
                   <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 flex gap-3">
@@ -331,34 +303,32 @@ export default function ProfilePage() {
                     <input type="text" value={pp.iban} maxLength={32}
                       onChange={e => setPp(p => ({ ...p, iban: e.target.value.toUpperCase() }))}
                       placeholder="TR00 0000 0000 0000 0000 0000 00"
-                      className={`${inputCls} font-mono tracking-widest`} />
+                      className="input font-mono tracking-widest" />
                   </Field>
                 </div>
               )}
 
-              {/* Şahıs → TCKN */}
               {pp.business_type === 'sahis' && (
                 <Field label="T.C. Kimlik Numarası (TCKN)" required>
                   <input type="text" inputMode="numeric" maxLength={11} value={pp.tckn}
                     onChange={e => setPp(p => ({ ...p, tckn: e.target.value.replace(/\D/g, '') }))}
-                    placeholder="11 haneli TCKN" className={inputCls} />
-                  {pp.tckn && pp.tckn.length !== 11 && <p className="mt-1 text-xs text-red-500">{pp.tckn.length}/11 hane</p>}
+                    placeholder="11 haneli TCKN" className="input" />
+                  {pp.tckn && pp.tckn.length !== 11 && <p className="mt-1 text-xs" style={{ color: 'var(--color-danger)' }}>{pp.tckn.length}/11 hane</p>}
                 </Field>
               )}
 
-              {/* Tüzel → VKN + Ünvan */}
               {pp.business_type === 'tuzel' && (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Vergi Kimlik Numarası (VKN)" required>
                     <input type="text" inputMode="numeric" maxLength={10} value={pp.vkn}
                       onChange={e => setPp(p => ({ ...p, vkn: e.target.value.replace(/\D/g, '') }))}
-                      placeholder="10 haneli VKN" className={inputCls} />
-                    {pp.vkn && pp.vkn.length !== 10 && <p className="mt-1 text-xs text-red-500">{pp.vkn.length}/10 hane</p>}
+                      placeholder="10 haneli VKN" className="input" />
+                    {pp.vkn && pp.vkn.length !== 10 && <p className="mt-1 text-xs" style={{ color: 'var(--color-danger)' }}>{pp.vkn.length}/10 hane</p>}
                   </Field>
                   <Field label="Ticaret Ünvanı" required>
                     <input type="text" value={pp.ticaret_unvani}
                       onChange={e => setPp(p => ({ ...p, ticaret_unvani: e.target.value }))}
-                      placeholder="Örn: Tiridy Teknoloji A.Ş." className={inputCls} />
+                      placeholder="Örn: Tiridy Teknoloji A.Ş." className="input" />
                   </Field>
                 </div>
               )}
@@ -367,72 +337,68 @@ export default function ProfilePage() {
                 <Field label="Vergi Dairesi" required>
                   <input type="text" value={pp.vergi_dairesi}
                     onChange={e => setPp(p => ({ ...p, vergi_dairesi: e.target.value }))}
-                    placeholder="Örn: Kadıköy Vergi Dairesi" className={inputCls} />
+                    placeholder="Örn: Kadıköy Vergi Dairesi" className="input" />
                 </Field>
               )}
             </SectionCard>
 
-            {/* Vergi Levhası — sadece şahıs/tüzel */}
+            {/* Vergi Levhası */}
             {(pp.business_type === 'sahis' || pp.business_type === 'tuzel') && (
               <SectionCard title="Vergi Levhası" icon="📄">
-                <div
-                  onClick={() => fileRef.current?.click()}
-                  className={`cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition-all ${
-                    selectedFile ? 'border-orange-400 bg-orange-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
+                <div onClick={() => fileRef.current?.click()}
+                  className={`dropzone cursor-pointer ${selectedFile ? 'dropzone-success' : ''}`}>
                   <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden"
                     onChange={e => setSelectedFile(e.target.files?.[0] ?? null)} />
                   {selectedFile ? (
                     <>
-                      <p className="text-sm font-medium text-orange-600">📎 {selectedFile.name}</p>
-                      <p className="mt-1 text-xs text-gray-400">{(selectedFile.size / 1024).toFixed(0)} KB — değiştirmek için tıkla</p>
+                      <p className="text-sm font-medium" style={{ color: 'var(--color-brand-500)' }}>📎 {selectedFile.name}</p>
+                      <p className="mt-1 text-xs" style={{ color: 'var(--color-neutral-400)' }}>{(selectedFile.size / 1024).toFixed(0)} KB — değiştirmek için tıkla</p>
                     </>
                   ) : pp.vergi_levhasi_url ? (
                     <>
-                      <p className="text-sm text-gray-600">✓ Belge yüklü</p>
-                      <p className="mt-1 text-xs text-gray-400">Değiştirmek için tıkla (isteğe bağlı)</p>
+                      <p className="text-sm" style={{ color: 'var(--color-neutral-600)' }}>✓ Belge yüklü</p>
+                      <p className="mt-1 text-xs" style={{ color: 'var(--color-neutral-400)' }}>Değiştirmek için tıkla (isteğe bağlı)</p>
                     </>
                   ) : (
                     <>
                       <p className="text-3xl mb-2">📄</p>
-                      <p className="text-sm font-medium text-gray-700">Vergi levhasını yükle</p>
-                      <p className="mt-1 text-xs text-gray-400">PDF, JPG, PNG, WEBP — maks. 10 MB</p>
+                      <p className="text-sm font-medium" style={{ color: 'var(--color-neutral-700)' }}>Vergi levhasını yükle</p>
+                      <p className="mt-1 text-xs" style={{ color: 'var(--color-neutral-400)' }}>PDF, JPG, PNG, WEBP — maks. 10 MB</p>
                     </>
                   )}
                 </div>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs" style={{ color: 'var(--color-neutral-400)' }}>
                   Belge AI tarafından doğrulanır. Girdiğiniz {pp.business_type === 'sahis' ? 'TCKN' : 'VKN'} ile belgede yazan numara karşılaştırılır.
                 </p>
               </SectionCard>
             )}
 
-            {/* Firma Bilgileri — sadece şahıs/tüzel */}
+            {/* Firma Bilgileri */}
             {(pp.business_type === 'sahis' || pp.business_type === 'tuzel') && (
               <SectionCard title="Firma Bilgileri" icon="🏢">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Firma / Marka Adı" required>
                     <input type="text" value={pp.company_name} placeholder="Görünen firma adı"
-                      onChange={e => setPp(p => ({ ...p, company_name: e.target.value }))} className={inputCls} />
+                      onChange={e => setPp(p => ({ ...p, company_name: e.target.value }))} className="input" />
                   </Field>
                   <Field label="Konum">
                     <input type="text" value={pp.location} placeholder="İstanbul, Türkiye"
-                      onChange={e => setPp(p => ({ ...p, location: e.target.value }))} className={inputCls} />
+                      onChange={e => setPp(p => ({ ...p, location: e.target.value }))} className="input" />
                   </Field>
                   <Field label="İletişim Telefonu">
                     <input type="tel" value={pp.contact_info.phone ?? ''} placeholder="+90 2xx xxx xx xx"
-                      onChange={e => setPp(p => ({ ...p, contact_info: { ...p.contact_info, phone: e.target.value } }))} className={inputCls} />
+                      onChange={e => setPp(p => ({ ...p, contact_info: { ...p.contact_info, phone: e.target.value } }))} className="input" />
                   </Field>
                   <Field label="Web Sitesi">
                     <input type="url" value={pp.contact_info.website ?? ''} placeholder="https://firmaniz.com"
-                      onChange={e => setPp(p => ({ ...p, contact_info: { ...p.contact_info, website: e.target.value } }))} className={inputCls} />
+                      onChange={e => setPp(p => ({ ...p, contact_info: { ...p.contact_info, website: e.target.value } }))} className="input" />
                   </Field>
                 </div>
                 <Field label="Firma Açıklaması">
                   <textarea rows={4} value={pp.description}
                     onChange={e => setPp(p => ({ ...p, description: e.target.value }))}
                     placeholder="Firmanız ve uzmanlık alanlarınız hakkında kısa bilgi..."
-                    className={`${inputCls} resize-none`} />
+                    className="input resize-none" />
                 </Field>
               </SectionCard>
             )}
@@ -441,33 +407,34 @@ export default function ProfilePage() {
 
         {/* Durum mesajları */}
         {error && (
-          <div className="flex items-start gap-3 rounded-xl bg-red-50 border border-red-200 px-4 py-3">
-            <span className="text-red-500 shrink-0">⚠️</span>
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="flex items-start gap-3 rounded-xl border px-4 py-3"
+            style={{ background: 'var(--color-danger-light)', borderColor: 'var(--color-danger)' }}>
+            <span className="shrink-0" style={{ color: 'var(--color-danger)' }}>⚠️</span>
+            <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>
           </div>
         )}
         {success && (
-          <div className="flex items-start gap-3 rounded-xl bg-green-50 border border-green-200 px-4 py-3">
+          <div className="flex items-start gap-3 rounded-xl border px-4 py-3"
+            style={{ background: 'var(--color-success-light)', borderColor: 'var(--color-success)' }}>
             <span className="shrink-0">✅</span>
-            <p className="text-sm text-green-700">Profil başarıyla kaydedildi ve doğrulandı!</p>
+            <p className="text-sm" style={{ color: 'var(--color-success)' }}>Profil başarıyla kaydedildi ve doğrulandı!</p>
           </div>
         )}
         {verifying && (
-          <div className="flex items-center gap-3 rounded-xl bg-yellow-50 border border-yellow-200 px-4 py-3">
+          <div className="flex items-center gap-3 rounded-xl border px-4 py-3"
+            style={{ background: 'var(--color-warning-light)', borderColor: 'var(--color-warning)' }}>
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-yellow-200 border-t-yellow-500 shrink-0" />
-            <p className="text-sm text-yellow-700">AI belgenizi inceliyor, lütfen bekleyin...</p>
+            <p className="text-sm" style={{ color: 'var(--color-warning)' }}>AI belgenizi inceliyor, lütfen bekleyin...</p>
           </div>
         )}
 
         {/* Butonlar */}
         <div className="flex items-center justify-between pt-1 pb-6">
-          <button type="button"
-            onClick={() => router.push(role === 'producer' ? '/dashboard/producer' : '/dashboard/customer')}
-            className="rounded-xl border border-gray-200 px-5 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors">
+          <button type="button" onClick={() => router.push(role === 'producer' ? '/dashboard/producer' : '/dashboard/customer')}
+            className="btn btn-secondary">
             İptal
           </button>
-          <button type="submit" disabled={saving || verifying}
-            className="rounded-xl bg-orange-500 px-7 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50 transition-colors shadow-sm shadow-orange-200">
+          <button type="submit" disabled={saving || verifying} className="btn btn-primary disabled:opacity-50">
             {saving ? 'Kaydediliyor...' : verifying ? 'Doğrulanıyor...' : 'Kaydet'}
           </button>
         </div>
